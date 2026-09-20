@@ -6,6 +6,7 @@ import IntentHandlerTracking from '../../data/tracking/intentHandlerTracking';
 import QR_TRACKING from '../../data/tracking/qrTracking';
 import { BEAN_CODE_ACTION } from '../../enums/beans/beanCodeAction';
 import { ServerBean } from '../../models/bean/serverBean';
+import { BrewImportService } from '../brewImport/brew-import.service';
 import { ServerCommunicationService } from '../serverCommunication/server-communication.service';
 import { UIAlert } from '../uiAlert';
 import { UIAnalytics } from '../uiAnalytics';
@@ -14,6 +15,10 @@ import { UIBrewHelper } from '../uiBrewHelper';
 import { UIHelper } from '../uiHelper';
 import { UILog } from '../uiLog';
 import { VisualizerService } from '../visualizerService/visualizer-service.service';
+import {
+  collectHandoffPayload,
+  decodeHandoffPayload,
+} from './brew-handoff.decoder';
 
 @Injectable({
   providedIn: 'root',
@@ -29,11 +34,13 @@ export class IntentHandlerService {
   private readonly uiAlert = inject(UIAlert);
   private readonly uiAnalytics = inject(UIAnalytics);
   private readonly visualizerService = inject(VisualizerService);
+  private readonly brewImportService = inject(BrewImportService);
   private readonly zone = inject(NgZone);
 
   public static SUPPORTED_INTENTS = {
     ADD_BEAN_ONLINE: 'ADD_BEAN_ONLINE',
     ADD_USER_BEAN: 'ADD_USER_BEAN',
+    ADD_BREW: 'ADD_BREW',
   };
 
   public attachOnHandleOpenUrl() {
@@ -115,6 +122,12 @@ export class IntentHandlerService {
               userBeanJSON = userBeanJSON.replace(/ /g, '+');
               await this.addBeanFromUser(userBeanJSON);
             }
+          } else if (
+            url
+              .toLowerCase()
+              .indexOf('beanconqueror://ADD_BREW'.toLowerCase()) === 0
+          ) {
+            await this.addBrewFromHandoff(url);
           } else if (
             url
               .toLowerCase()
@@ -202,6 +215,46 @@ export class IntentHandlerService {
         this.uiAlert.hideLoadingSpinner();
       }
       this.uiLog.error('Handle Deep link failed: ' + ex.message);
+    }
+  }
+
+  /**
+   * Receive a brew handed over from another app.
+   *
+   * The payload arrives split across numbered `shareBrew` parameters, exactly
+   * as the bean share does, because a single parameter long enough to hold a
+   * whole brew is truncated by the OS. The decoder is the trust boundary: it
+   * validates before anything reaches storage, and every rejection carries a
+   * specific reason, so the log says what was wrong rather than only that
+   * something was.
+   */
+  private async addBrewFromHandoff(_url: string) {
+    this.uiLog.log('Import brew from handoff link');
+
+    try {
+      await this.uiAlert.showLoadingSpinner();
+      this.uiAnalytics.trackEvent(
+        IntentHandlerTracking.TITLE,
+        IntentHandlerTracking.ACTIONS.ADD_HANDOFF_BREW,
+      );
+      const envelope = await decodeHandoffPayload(collectHandoffPayload(_url));
+      await this.brewImportService.import(envelope);
+      await this.uiAlert.hideLoadingSpinner();
+      this.uiAlert.showMessage(
+        'BREW_IMPORT_SUCCESSFUL',
+        undefined,
+        undefined,
+        true,
+      );
+    } catch (ex) {
+      this.uiLog.error('Import brew from handoff link failed: ' + ex.message);
+      await this.uiAlert.hideLoadingSpinner();
+      this.uiAlert.showMessage(
+        'BREW_IMPORT_FAILED',
+        'ERROR_OCCURED',
+        undefined,
+        true,
+      );
     }
   }
 
