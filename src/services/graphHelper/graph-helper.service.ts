@@ -281,7 +281,7 @@ export class GraphHelperService {
         traces.customTraces[customAxis.key] = {
           x: [],
           y: [],
-          name: this.translate.instant(customAxis.name),
+          name: this.getCustomAxisName(customAxis),
           yaxis: 'y' + customAxisIndex,
           type: 'scatter',
           mode: 'lines',
@@ -459,7 +459,7 @@ export class GraphHelperService {
             _traces.customTraces[key] = {
               x: [],
               y: [],
-              name: this.translate.instant(customAxis.name),
+              name: this.getCustomAxisName(customAxis),
               yaxis: 'y' + customAxisIndex,
               type: 'scatter',
               mode: 'lines',
@@ -1027,5 +1027,20 @@ export class GraphHelperService {
     }
 
     return layout;
+  }
+
+  /**
+   * An imported axis may carry a translated prefix alongside the sending
+   * app's own label. The prefix is a Beanconqueror i18n key so it follows the
+   * UI language; the label is the sender's and is passed through verbatim,
+   * because we cannot translate a string we did not write.
+   */
+  private getCustomAxisName(customAxis: IBrewCustomAxis): string {
+    if (!customAxis.namePrefix) {
+      return this.translate.instant(customAxis.name);
+    }
+    return (
+      this.translate.instant(customAxis.namePrefix) + ': ' + customAxis.name
+    );
   }
 }

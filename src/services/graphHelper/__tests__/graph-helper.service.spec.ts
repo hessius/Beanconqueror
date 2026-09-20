@@ -4,6 +4,7 @@ import { Platform } from '@ionic/angular/standalone';
 
 import { TranslateService } from '@ngx-translate/core';
 
+import { BrewFlow } from '../../../classes/brew/brewFlow';
 import { Settings } from '../../../classes/settings/settings';
 import { PREPARATION_STYLE_TYPE } from '../../../enums/preparations/preparationStyleTypes';
 import { CoffeeBluetoothDevicesService } from '../../coffeeBluetoothDevices/coffee-bluetooth-devices.service';
@@ -13,6 +14,63 @@ import {
   expandLiveAxisRangeForSample,
   GraphHelperService,
 } from '../graph-helper.service';
+
+describe('GraphHelperService custom axis names', () => {
+  let service: GraphHelperService;
+
+  beforeEach(() => {
+    service = buildService();
+  });
+
+  it('renders a legacy custom axis without a prefix artifact', () => {
+    const traces = service.initializeTraces();
+    const brewFlow = new BrewFlow();
+    addGraphSample(brewFlow);
+    brewFlow.customMetrics.legacyPressure = [
+      { value: 4, timestamp: '00:00:01.000', brew_time: '1.000' },
+    ];
+    brewFlow.customAxes = [
+      {
+        key: 'legacyPressure',
+        name: 'Pressure',
+        unit: 'bar',
+        colorLight: '#000000',
+        colorDark: '#ffffff',
+      },
+    ];
+
+    service.fillTraces(traces, graphSettings(), true);
+    service.fillDataIntoTraces(brewFlow, traces);
+
+    expect(traces.customTraces.legacyPressure.name).toBe('Pressure');
+  });
+
+  it('renders an imported custom axis with its translated prefix', () => {
+    const traces = service.initializeTraces();
+    const brewFlow = new BrewFlow();
+    addGraphSample(brewFlow);
+    brewFlow.customMetrics.targetTemperature = [
+      { value: 93, timestamp: '00:00:01.000', brew_time: '1.000' },
+    ];
+    brewFlow.customAxes = [
+      {
+        key: 'targetTemperature',
+        namePrefix: 'BREW_IMPORT_METRIC_TARGET',
+        name: 'Temperature',
+        unit: '°C',
+        colorLight: '#000000',
+        colorDark: '#ffffff',
+      },
+    ];
+
+    service.fillTraces(traces, graphSettings(), true);
+    service.fillDataIntoTraces(brewFlow, traces);
+
+    expect(traces.customTraces.targetTemperature.name).toBe(
+      'Target: Temperature',
+    );
+  });
+});
 
 describe('GraphHelperService axis fitting', () => {
   let service: GraphHelperService;
@@ -400,6 +458,7 @@ describe('GraphHelperService axis fitting', () => {
     expect(layout['yaxis6'].range[1]).toBeGreaterThanOrEqual(260);
   });
 });
+
 function filledTraces(service: GraphHelperService) {
   const traces = service.initializeTraces();
   return service.fillTraces(traces, graphSettings(), true);
@@ -436,7 +495,12 @@ function layoutFor(
 
 function buildService(): GraphHelperService {
   const translate = jasmine.createSpyObj('TranslateService', ['instant']);
-  translate.instant.and.callFake((key: string | undefined) => String(key));
+  translate.instant.and.callFake((key: string | undefined) => {
+    if (key === 'BREW_IMPORT_METRIC_TARGET') {
+      return 'Target';
+    }
+    return String(key);
+  });
 
   TestBed.configureTestingModule({
     providers: [
@@ -486,4 +550,15 @@ function graphSettings() {
     weightSecond: true,
     realtime_flowSecond: true,
   };
+}
+
+function addGraphSample(brewFlow: BrewFlow): void {
+  brewFlow.temperatureFlow = [
+    {
+      actual_temperature: 90,
+      old_temperature: 0,
+      timestamp: '00:00:00.000',
+      brew_time: '0.000',
+    },
+  ];
 }
