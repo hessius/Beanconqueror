@@ -497,6 +497,78 @@ describe('BrewImportService', () => {
     expect(millStorage.add.calls.count()).toBe(0);
   });
 
+  it('links a grinder the user named with the model, from a maker-only hint', () => {
+    // The sending machine knows its maker and not its model; the user types
+    // the model. Neither name is wrong, and before this the two never met.
+    millStorage.getAllEntries.and.returnValue([
+      entry(new Mill(), 'Any grinder Studio', 'mill-studio'),
+    ]);
+
+    const result = service.build(envelope());
+
+    expect(result.brew.mill).toBe('mill-studio');
+    expect(result.brew.note).toContain(
+      'Grinder linked to "Any grinder Studio" from "Any grinder".',
+    );
+    expect(millStorage.add.calls.count()).toBe(0);
+  });
+
+  it('links a grinder named shorter than the hint', () => {
+    // The other direction: once the sender can read its own model, the hint
+    // is the longer of the two and the user's entry is the bare maker.
+    millStorage.getAllEntries.and.returnValue([
+      entry(new Mill(), 'Any', 'mill-short'),
+    ]);
+
+    const result = service.build(envelope());
+
+    expect(result.brew.mill).toBe('mill-short');
+    expect(result.brew.note).toContain(
+      'Grinder linked to "Any" from "Any grinder".',
+    );
+  });
+
+  it('refuses to guess between two grinders of the same make', () => {
+    // A user with both is telling us the distinction matters to them.
+    millStorage.getAllEntries.and.returnValue([
+      entry(new Mill(), 'Any grinder Studio', 'mill-studio'),
+      entry(new Mill(), 'Any grinder Original', 'mill-original'),
+    ]);
+
+    const result = service.build(envelope());
+
+    expect(result.brew.mill).toBe('');
+    expect(result.brew.note).toContain('Grinder not linked');
+  });
+
+  it('does not reach across a word boundary when widening a name', () => {
+    // A substring search would take "Ode" to "Odessa". The longer name has to
+    // carry on with a separator, not with more of the same word.
+    millStorage.getAllEntries.and.returnValue([
+      entry(new Mill(), 'Any grinderr', 'mill-other'),
+    ]);
+
+    const result = service.build(envelope());
+
+    expect(result.brew.mill).toBe('');
+    expect(result.brew.note).toContain('Grinder not linked');
+  });
+
+  it('widens a bean name the same way, before falling back', () => {
+    const widened = [entry(new Bean(), 'Any coffee Natural', 'bean-natural')];
+    beanStorage.getAllEntries.and.returnValue(widened);
+    beanStorage.getByUUID.and.callFake((uuid: string) =>
+      widened.find((bean) => bean.config.uuid === uuid),
+    );
+
+    const result = service.build(envelope({ bean: { name: 'Any coffee' } }));
+
+    expect(result.brew.bean).toBe('bean-natural');
+    expect(result.brew.note).toContain(
+      'Bean linked to "Any coffee Natural" from "Any coffee".',
+    );
+  });
+
   it('falls back to the first active preparation for a missing preparation and does not create one', () => {
     const preparations = [
       entry(new Preparation(), 'V60', 'preparation-v60'),

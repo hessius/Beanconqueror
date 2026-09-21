@@ -297,6 +297,16 @@ export class BrewImportService {
       return { uuid: matches[0].config.uuid };
     }
 
+    if (matches.length === 0) {
+      const wider = this.findUniqueModelMatch(entries, normalizedHint);
+      if (wider) {
+        return {
+          uuid: wider.config.uuid,
+          note: `${label} linked to "${wider.name}" from "${hintedName.trim()}".`,
+        };
+      }
+    }
+
     const reason = matches.length === 0 ? 'no match' : 'multiple matches';
     return fallbackNote(reason);
   }
@@ -318,11 +328,61 @@ export class BrewImportService {
       return { uuid: matches[0].config.uuid };
     }
 
+    if (matches.length === 0) {
+      const wider = this.findUniqueModelMatch(entries, normalizedHint);
+      if (wider) {
+        return {
+          uuid: wider.config.uuid,
+          note: `${label} linked to "${wider.name}" from "${hintedName.trim()}".`,
+        };
+      }
+    }
+
     const reason = matches.length === 0 ? 'no match' : 'multiple matches';
     return {
       uuid: '',
       note: `${label} not linked: "${hintedName.trim()}" (${reason}).`,
     };
+  }
+
+  /**
+   * The one entry whose name and the hint are the same equipment named at
+   * different lengths.
+   *
+   * A sending app usually knows its maker and not its model, and a user
+   * usually types the model: a machine that calls itself "xBloom" never found
+   * a mill the user had entered as "xBloom Studio", and neither name is wrong.
+   * So a name that is a whole leading word of the other counts, in either
+   * direction, because which of the two is the longer depends on which side
+   * knows more.
+   *
+   * The boundary is what keeps this from being a substring search. "Ode" must
+   * not reach "Odessa", so the longer name has to continue with a separator
+   * rather than with more of a word. And it must be the *only* such entry: a
+   * user with both an xBloom Studio and an xBloom Original is telling us the
+   * distinction matters to them, so a hint that cannot choose between them
+   * falls through to the note rather than guessing.
+   */
+  private findUniqueModelMatch(
+    entries: IStoredNamedEntry[],
+    normalizedHint: string,
+  ): IStoredNamedEntry | undefined {
+    const extendsName = (longer: string, shorter: string): boolean =>
+      longer.length > shorter.length &&
+      longer.startsWith(shorter) &&
+      /[\s\-_/]/.test(longer.charAt(shorter.length));
+
+    const candidates = entries.filter((entry) => {
+      const name = this.normalizeName(entry.name);
+      if (!name) {
+        return false;
+      }
+      return (
+        extendsName(name, normalizedHint) || extendsName(normalizedHint, name)
+      );
+    });
+
+    return candidates.length === 1 ? candidates[0] : undefined;
   }
 
   private firstUsableEntry(

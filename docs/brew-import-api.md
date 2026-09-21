@@ -200,6 +200,21 @@ Bean, grinder, and preparation hints are matched by name after Unicode NFC
 normalisation, trimming, and locale lowercasing. The importer never creates a
 bean, grinder, or preparation from an incoming link.
 
+When an exact match fails, one widening step is tried: a stored entry whose
+name and the hint are the same equipment named at different lengths, in either
+direction. A sending app usually knows its maker and not its model, and a user
+usually types the model, so a machine calling itself `xBloom` never found a
+mill entered as `xBloom Studio`, and neither name was wrong.
+
+The shorter name must be a whole leading word of the longer one: the longer
+name has to carry on with a separator (whitespace, `-`, `_`, or `/`) rather
+than with more of the same word, so `Ode` does not reach `Odessa`. The widened
+match must also be unique. A user with both an `xBloom Studio` and an `xBloom
+Original` is saying the distinction matters, so a hint that cannot choose
+between them falls through rather than guessing. A widened match appends a note
+naming both, for example
+`Grinder linked to "xBloom Studio" from "xBloom".`
+
 Bean and preparation use `findUniqueOrDefault()`:
 
 - One match links that stored entry.
