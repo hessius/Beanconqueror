@@ -206,7 +206,9 @@ Bean and preparation use `findUniqueOrDefault()`:
 - A note is appended, for example
   `Bean not linked: "Unknown coffee" (no match). Using "Alpha coffee".`
 - If there is no usable fallback entry, the importer throws
-  `<Label> not linked: no available <Label>.`
+  `<Label> not linked: no available <Label>.` In practice a sender does not
+  reach that throw, because the route refuses an empty library first. See
+  "Limits and failure modes".
 
 Grinder uses `findUniqueByName()`:
 
@@ -384,6 +386,15 @@ with `Truncated brew handoff payload: expected 1594 characters, got 1200`
 before any decompression was attempted.
 
 ## Limits and failure modes
+
+Before anything is decoded, the route calls `canBrewIfNotShowMessage()`. An
+imported brew is linked to a bean, a preparation method and a grinder exactly
+like a hand-entered one, so a library missing any of the three cannot take one.
+That case shows Beanconqueror's existing "Something is missing here..."
+popover, which names the missing equipment, and the link is dropped without a
+decode. Beanconqueror seeds preparation methods on first run but never seeds a
+bean, so this is the expected outcome of the first handoff into a fresh
+install. Nothing is wrong with the link, and no sender change can avoid it.
 
 All decoder failures throw an `Error`. The route catches the error, logs
 `Import brew from handoff link failed: <message>`, hides the loading spinner,

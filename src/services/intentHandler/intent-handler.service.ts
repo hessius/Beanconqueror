@@ -231,6 +231,15 @@ export class IntentHandlerService {
   private async addBrewFromHandoff(_url: string) {
     this.uiLog.log('Import brew from handoff link');
 
+    // An imported brew is linked to a bean, a preparation method and a grinder
+    // just like a hand-entered one, so an empty library fails it for the same
+    // reason a new brew cannot be started. Ask first and reuse that answer:
+    // "the brew could not be read" would blame the link for a missing bean.
+    if (this.uiBrewHelper.canBrewIfNotShowMessage() === false) {
+      this.uiLog.log('Import brew from handoff link skipped: cannot brew yet');
+      return;
+    }
+
     try {
       await this.uiAlert.showLoadingSpinner();
       this.uiAnalytics.trackEvent(
