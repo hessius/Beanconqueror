@@ -276,6 +276,27 @@ describe('BrewImportService', () => {
     expect(result.brew.config.unix_timestamp).toBe(1789907696);
   });
 
+  it('carries a rating across and leaves an unrated brew at zero', () => {
+    expect(
+      service.build(envelope({ brew: { ...envelope().brew, rating: 4 } })).brew
+        .rating,
+    ).toBe(4);
+    expect(service.build(envelope()).brew.rating).toBe(0);
+  });
+
+  /**
+   * Clamped rather than rescaled: stretching a 4 into an 8 because this
+   * install counts to ten would put a verdict in the diary that nobody gave.
+   */
+  it('holds an incoming rating to the scale this user has set', () => {
+    settings.brew_rating = 3;
+
+    expect(
+      service.build(envelope({ brew: { ...envelope().brew, rating: 5 } })).brew
+        .rating,
+    ).toBe(3);
+  });
+
   it('splits fractional bloom and first-drip times into seconds and milliseconds', () => {
     const result = service.build(
       envelope({

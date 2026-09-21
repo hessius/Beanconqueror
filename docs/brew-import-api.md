@@ -86,22 +86,23 @@ provenance.
 
 ### `brew`
 
-| Field               | Type     | Required | Unit               | Decoder rule                                                                    |
-| ------------------- | -------- | -------- | ------------------ | ------------------------------------------------------------------------------- |
-| `date`              | string   | yes      | ISO 8601 timestamp | Must match the decoder's ISO 8601 pattern and parse to a finite date.           |
-| `doseIn`            | quantity | no       | `g`                | Value must be finite and between 0 and 200. Unit must be `g`.                   |
-| `waterIn`           | quantity | yes      | `ml`               | Value must be finite and non negative. Unit must be `ml`.                       |
-| `beverageOut`       | quantity | yes      | `g`                | Value must be finite and non negative. Unit must be `g`.                        |
-| `brewTime`          | number   | yes      | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                     |
-| `temperature`       | number   | no       | degrees Celsius    | Finite, -50 to 250. Schema v1 is a bare Celsius number.                         |
-| `ratio`             | number   | no       |                    | Finite and non negative.                                                        |
-| `grindSize`         | string   | no       | sender defined     | Empty string is treated as absent. Non empty values are at most 512 characters. |
-| `grinderRpm`        | number   | no       | rpm                | Finite and non negative.                                                        |
-| `grinderName`       | string   | no       |                    | Empty string is treated as absent. Non empty values are at most 512 characters. |
-| `preparationMethod` | string   | yes      |                    | Non empty, at most 512 characters.                                              |
-| `bloomTime`         | number   | no       | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                     |
-| `firstDripTime`     | number   | no       | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                     |
-| `note`              | string   | no       |                    | Defaults to `""`. At most 10,000 characters.                                    |
+| Field               | Type     | Required | Unit               | Decoder rule                                                                        |
+| ------------------- | -------- | -------- | ------------------ | ----------------------------------------------------------------------------------- |
+| `date`              | string   | yes      | ISO 8601 timestamp | Must match the decoder's ISO 8601 pattern and parse to a finite date.               |
+| `doseIn`            | quantity | no       | `g`                | Value must be finite and between 0 and 200. Unit must be `g`.                       |
+| `waterIn`           | quantity | yes      | `ml`               | Value must be finite and non negative. Unit must be `ml`.                           |
+| `beverageOut`       | quantity | yes      | `g`                | Value must be finite and non negative. Unit must be `g`.                            |
+| `brewTime`          | number   | yes      | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                         |
+| `temperature`       | number   | no       | degrees Celsius    | Finite, -50 to 250. Schema v1 is a bare Celsius number.                             |
+| `ratio`             | number   | no       |                    | Finite and non negative.                                                            |
+| `grindSize`         | string   | no       | sender defined     | Empty string is treated as absent. Non empty values are at most 512 characters.     |
+| `grinderRpm`        | number   | no       | rpm                | Finite and non negative.                                                            |
+| `grinderName`       | string   | no       |                    | Empty string is treated as absent. Non empty values are at most 512 characters.     |
+| `preparationMethod` | string   | yes      |                    | Non empty, at most 512 characters.                                                  |
+| `bloomTime`         | number   | no       | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                         |
+| `firstDripTime`     | number   | no       | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                         |
+| `rating`            | number   | no       | stars              | Whole number, 0 to 10, on the sending app's own scale. Omit it for an unrated brew. |
+| `note`              | string   | no       |                    | Defaults to `""`. At most 10,000 characters.                                        |
 
 Quantity objects have this shape:
 
@@ -168,6 +169,7 @@ capped at 10,000 characters, and object keys are capped at 512 characters.
 | `brew.bloomTime`         | Split into `coffee_blooming_time` and `coffee_blooming_time_milliseconds`. Missing value becomes `0`.     |
 | `brew.date`              | Parsed with `Date.parse`, divided by 1,000, floored, and stored in `brew.config.unix_timestamp`.          |
 | `imported`               | Stored in `brew.customInformation.imported`.                                                              |
+| `brew.rating`            | Clamped to the user's configured rating scale, never rescaled. Missing value becomes `0`.                 |
 | `brew.note`              | Starts `brew.note`. Name matching notes are appended after blank lines.                                   |
 | `bean.name`              | Used only as a lookup hint. Other bean fields are not mapped.                                             |
 | `brew.ratio`             | Validated but not stored by the importer. Beanconqueror derives displayed ratios from quantities.         |
@@ -253,6 +255,7 @@ this branch. The decoded envelope matched the original.
     "preparationMethod": "Example Dripper",
     "bloomTime": 35.5,
     "firstDripTime": 12.25,
+    "rating": 4,
     "note": "Balanced sweetness with a light citrus finish."
   },
   "bean": {
@@ -439,6 +442,7 @@ and shows the generic `BREW_IMPORT_FAILED` alert.
 | Quantity value outside range                               | `<path>.value must be between <min> and <max>`                               | Keep dose 0 to 200 g, water and beverage non negative.                                                                                                                                                                  |
 | Numeric brew field not finite or outside range             | `<path> must be a finite number` or `<path> must be between <min> and <max>` | Keep fields finite and inside their documented bounds.                                                                                                                                                                  |
 | `preparationMethod` invalid                                | `Envelope brew.preparationMethod must be ...`                                | Send a non empty string of at most 512 characters.                                                                                                                                                                      |
+| `rating` fractional or out of range                        | `Envelope brew.rating must be an integer` / `... must be between 0 and 10`   | Send a whole number of stars, or omit it.                                                                                                                                                                               |
 | `note` too long or wrong type                              | `Envelope brew.note must be between 0 and 10000 characters`                  | Omit it or keep it within the cap.                                                                                                                                                                                      |
 | `flow` missing required shape                              | `Envelope flow must be an object` or field specific messages                 | Omit flow or send the full flow block.                                                                                                                                                                                  |
 | Bad `flow.fidelity`                                        | `Envelope flow.fidelity must be full or downsampled`                         | Send `full` or `downsampled`.                                                                                                                                                                                           |

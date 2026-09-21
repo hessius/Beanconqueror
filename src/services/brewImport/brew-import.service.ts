@@ -77,6 +77,7 @@ export class BrewImportService {
         brew.coffee_blooming_time_milliseconds = milliseconds;
       },
     );
+    brew.rating = this.ratingOnThisScale(envelope.brew.rating);
     brew.config.unix_timestamp = Math.floor(
       Date.parse(envelope.brew.date) / 1000,
     );
@@ -334,6 +335,22 @@ export class BrewImportService {
 
   private normalizeName(name: string): string {
     return name.normalize('NFC').trim().toLocaleLowerCase();
+  }
+
+  /**
+   * A rating from another app, held to this user's own scale.
+   *
+   * Clamped rather than rescaled: the number somebody typed is the number they
+   * meant, and stretching a 4 into an 8 because this install counts to ten
+   * would put a verdict in the diary that nobody gave. A brew that arrives
+   * unrated stays unrated, which on this scale is 0.
+   */
+  private ratingOnThisScale(rating: number | undefined): number {
+    if (rating === undefined || rating <= 0) {
+      return 0;
+    }
+    const ceiling = this.settingsStorage.getSettings().brew_rating;
+    return Math.min(rating, ceiling);
   }
 
   private assignSecondsAndMilliseconds(

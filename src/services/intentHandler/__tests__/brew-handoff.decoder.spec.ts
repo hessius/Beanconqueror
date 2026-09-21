@@ -467,6 +467,29 @@ describe('brew handoff decoder', () => {
     );
   });
 
+  it('carries a rating and leaves an unrated brew silent', async () => {
+    const decoded = await decodeEnvelope(
+      validEnvelope({ brew: { ...validEnvelope().brew, rating: 4 } }),
+    );
+    expect(decoded.brew.rating).toBe(4);
+
+    const unrated = await decodeEnvelope(validEnvelope());
+    expect(unrated.brew.rating).toBeUndefined();
+  });
+
+  it('refuses a rating that is not a whole number in range', async () => {
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({ brew: { ...validEnvelope().brew, rating: 3.5 } }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.rating must be an integer');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({ brew: { ...validEnvelope().brew, rating: 11 } }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.rating must be between 0 and 10');
+  });
+
   it('coerces empty optional strings to absent and defaults omitted note', async () => {
     const brewWithoutNote: Partial<IHandoffEnvelope['brew']> = {
       ...validEnvelope().brew,

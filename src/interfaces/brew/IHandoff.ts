@@ -49,6 +49,9 @@ export interface IHandoffBrew {
   preparationMethod: string;
   bloomTime?: number;
   firstDripTime?: number;
+  // Whole stars, on the sending app's own scale, and absent when the brew was
+  // never rated. Absent rather than 0, because 0 is a point on the scale.
+  rating?: number;
   note: string;
 }
 

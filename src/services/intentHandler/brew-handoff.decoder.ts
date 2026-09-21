@@ -38,6 +38,9 @@ const MAX_TEMPERATURE = 250;
 const MAX_LABEL_LENGTH = 512;
 // Notes are user-visible permanent text; 10,000 chars is generous without letting a link flood the form.
 const MAX_NOTE_LENGTH = 10_000;
+// A ceiling for the schema, not for this app: the sender states a rating on
+// its own scale, and the import clamps it to whatever scale the user has set.
+const MAX_RATING = 10;
 // Metric count is metadata, not the trace; 100 named series is already far beyond a brew chart.
 const MAX_METRICS = 100;
 // Opaque blocks may be rendered or copied later; cap their shape before a future deep-merge or stringify sees them.
@@ -365,6 +368,9 @@ function validateBrew(value: unknown): IHandoffBrew {
         0,
         MAX_SECONDS,
       ),
+    ),
+    ...optional(brew.rating, 'rating', (rating) =>
+      boundedInteger(rating, 'Envelope brew.rating', 0, MAX_RATING),
     ),
     note:
       brew.note === undefined
