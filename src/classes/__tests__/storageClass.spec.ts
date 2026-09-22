@@ -167,6 +167,38 @@ describe('StorageClass', () => {
     );
   });
 
+  it('handles a rejected alert promise while preserving the storage failure result', async () => {
+    const alertError = new Error('alert failed');
+    mockUIStorage.set.and.returnValue(Promise.resolve(false));
+    mockUIAlert.showMessage.and.callFake(() => Promise.reject(alertError));
+
+    const result = await expectSettled(storage.addAndConfirm(entry()));
+    await Promise.resolve();
+
+    expect(result.saved).toBeFalse();
+    expect(result.entry.config.uuid).toEqual(jasmine.any(String));
+    expect(mockUIAlert.showMessage).toHaveBeenCalledWith(
+      'Storage - Save Set - Unsuccessfully  - false',
+      'CRITICAL ERROR',
+    );
+    expect(mockUILog.error).toHaveBeenCalledWith(
+      'Storage - Alert - Unsuccessfully',
+      alertError,
+    );
+  });
+
+  it('does not wait for alert dismissal before settling a storage failure', async () => {
+    const pendingAlert = new Promise<void>(() => undefined);
+    const catchSpy = spyOn(pendingAlert, 'catch').and.callThrough();
+    mockUIStorage.set.and.returnValue(Promise.resolve(false));
+    mockUIAlert.showMessage.and.returnValue(pendingAlert);
+
+    const result = await expectSettled(storage.addAndConfirm(entry()));
+
+    expect(result.saved).toBeFalse();
+    expect(catchSpy).toHaveBeenCalledWith(jasmine.any(Function));
+  });
+
   it('keeps update not-found failures distinguishable from save failures', async () => {
     mockUIStorage.set.and.returnValue(Promise.resolve(true));
     storage.setEntries([entry('stored-uuid')]);

@@ -47,19 +47,27 @@ export abstract class StorageClass {
 
   // Dynamic import to avoid circular dependency:
   // StorageClass → UIAlert → ... → UISettingsStorage → extends StorageClass
-  private async showAlert(message: string, title?: string): Promise<void> {
+  private async showAlert(
+    message: string,
+    title: string | undefined,
+    onRejected: (reason: unknown) => void,
+  ): Promise<void> {
     const { UIAlert } = await import('../services/uiAlert');
-    UIAlert.getInstance()?.showMessage(message, title);
+    const alertPromise = UIAlert.getInstance()?.showMessage(message, title);
+    void alertPromise?.catch(onRejected);
   }
 
   private async showAlertSafely(
     message: string,
     title?: string,
   ): Promise<void> {
-    try {
-      await this.showAlert(message, title);
-    } catch (ex) {
+    const logAlertError = (ex: unknown) => {
       this.uiLog.error('Storage - Alert - Unsuccessfully', ex);
+    };
+    try {
+      await this.showAlert(message, title, logAlertError);
+    } catch (ex) {
+      logAlertError(ex);
     }
   }
 
