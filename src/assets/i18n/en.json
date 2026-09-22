@@ -877,7 +877,7 @@
     "BREW_IMPORT_METRIC_MEASURED": "Measured",
     "BREW_IMPORT_METRIC_TARGET": "Target",
     "BREW_IMPORT_SUCCESSFUL": "Brew imported",
-    "BREW_IMPORT_FAILED": "The shared brew could not be read",
+    "BREW_IMPORT_FAILED": "The shared brew could not be imported",
     "BREW_FLOW_WEIGHT": "Weight",
     "BREW_FLOW_WEIGHT_PER_SECOND": "Flow (smoothed)",
     "ROAST_TYPE_UNKNOWN": "Unknown",
