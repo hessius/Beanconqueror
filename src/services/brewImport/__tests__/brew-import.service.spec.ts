@@ -818,6 +818,7 @@ describe('BrewImportService', () => {
     const error = rejection as BrewImportRollbackError;
     expect(error.message).toBe('Imported brew update failed: saved-brew');
     expect(error.brewUuid).toBe('saved-brew');
+    expect(error.beanUuid).toBe('bean-1');
     expect(error.rolledBack).toBeTrue();
     expect(brewStorage.getEntryByUUID('saved-brew')).toBeNull();
     expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
@@ -845,6 +846,7 @@ describe('BrewImportService', () => {
     const error = rejection as BrewImportRollbackError;
     expect(error.message).toBe('Imported brew update failed: saved-brew');
     expect(error.brewUuid).toBe('saved-brew');
+    expect(error.beanUuid).toBe('bean-1');
     expect(error.rolledBack).toBeFalse();
     expect(brewStorage.getEntryByUUID('saved-brew')).not.toBeNull();
     expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
@@ -871,6 +873,25 @@ describe('BrewImportService', () => {
       'Import brew rollback flow-file delete failed: brews/saved-brew_flow_profile.json',
       jasmine.any(Error),
     );
+  });
+
+  it('reports the fallback bean uuid in rollback errors when the envelope has no bean', async () => {
+    brewStorage.failUpdate = true;
+
+    let rejection: unknown;
+    try {
+      await service.import(envelope({ bean: undefined }));
+      fail('Expected import to reject');
+    } catch (ex) {
+      rejection = ex;
+    }
+
+    expect(rejection).toEqual(jasmine.any(BrewImportRollbackError));
+    const error = rejection as BrewImportRollbackError;
+    expect(error.message).toBe('Imported brew update failed: saved-brew');
+    expect(error.brewUuid).toBe('saved-brew');
+    expect(error.beanUuid).toBe('bean-1');
+    expect(error.rolledBack).toBeTrue();
   });
 
   it('rejects without persisting when no bean or preparation fallback exists', async () => {
