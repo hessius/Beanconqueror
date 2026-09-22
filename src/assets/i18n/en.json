@@ -34,6 +34,8 @@
     "PAGE_BREWS_NO_ARCHIVED_ENTRIES": "You didn't archive any brews yet",
     "CANT_START_NEW_BREW_TITLE": "Something is missing here...",
     "CANT_START_NEW_BREW_DESCRIPTION": "To get started please create a description for one type of beans, one brewing method and one grinder. Use the menu to navigate to the different categories to add this information.",
+    "CANT_IMPORT_BREW_TITLE": "Something is missing here...",
+    "CANT_IMPORT_BREW_DESCRIPTION": "To import a brew, please create one bean and one brewing method first.",
     "PAGE_HOME_WELCOME_GREETINGS": "Nice to have you!",
     "PAGE_HOME_TOTAL_BREW": "Brew",
     "PAGE_HOME_TOTAL_BREWS": "Brews",

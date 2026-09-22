@@ -1,15 +1,25 @@
 import { NgZone } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
+import { ModalController } from '@ionic/angular/standalone';
+import { TranslateService } from '@ngx-translate/core';
+
+import { Settings } from '../../../classes/settings/settings';
 import type { IHandoffEnvelope } from '../../../interfaces/brew/IHandoff';
 import { BrewImportService } from '../../brewImport/brew-import.service';
+import { CoffeeBluetoothDevicesService } from '../../coffeeBluetoothDevices/coffee-bluetooth-devices.service';
 import { ServerCommunicationService } from '../../serverCommunication/server-communication.service';
 import { UIAlert } from '../../uiAlert';
 import { UIAnalytics } from '../../uiAnalytics';
 import { UIBeanHelper } from '../../uiBeanHelper';
+import { UIBeanStorage } from '../../uiBeanStorage';
 import { UIBrewHelper } from '../../uiBrewHelper';
+import { UIBrewStorage } from '../../uiBrewStorage';
 import { UIHelper } from '../../uiHelper';
 import { UILog } from '../../uiLog';
+import { UIMillStorage } from '../../uiMillStorage';
+import { UIPreparationStorage } from '../../uiPreparationStorage';
+import { UISettingsStorage } from '../../uiSettingsStorage';
 import { VisualizerService } from '../../visualizerService/visualizer-service.service';
 import { IntentHandlerService } from '../intent-handler.service';
 
@@ -93,15 +103,23 @@ describe('IntentHandlerService', () => {
   let uiLog: jasmine.SpyObj<UILog>;
   let serverCommunicationService: jasmine.SpyObj<ServerCommunicationService>;
   let uiBeanHelper: jasmine.SpyObj<UIBeanHelper>;
-  let uiBrewHelper: jasmine.SpyObj<UIBrewHelper>;
   let uiAlert: jasmine.SpyObj<UIAlert>;
   let uiAnalytics: jasmine.SpyObj<UIAnalytics>;
   let visualizerService: jasmine.SpyObj<VisualizerService>;
   let brewImportService: jasmine.SpyObj<BrewImportService>;
+  let beanStorage: jasmine.SpyObj<UIBeanStorage>;
+  let millStorage: jasmine.SpyObj<UIMillStorage>;
+  let preparationStorage: jasmine.SpyObj<UIPreparationStorage>;
+  let brewStorage: jasmine.SpyObj<UIBrewStorage>;
+  let settingsStorage: jasmine.SpyObj<UISettingsStorage>;
   let envelope: IHandoffEnvelope;
   let url: string;
 
   beforeEach(async () => {
+    const eventEmitter = {
+      subscribe: () => ({ unsubscribe: () => undefined }),
+    };
+
     uiHelper = jasmine.createSpyObj('UIHelper', ['isBeanconqurorAppReady']);
     uiLog = jasmine.createSpyObj('UILog', ['log', 'error']);
     serverCommunicationService = jasmine.createSpyObj(
@@ -115,29 +133,51 @@ describe('IntentHandlerService', () => {
       'detailBeanByInternalShareCode',
       'editBeanByInternalShareCode',
     ]);
-    uiBrewHelper = jasmine.createSpyObj('UIBrewHelper', [
-      'canBrewIfNotShowMessage',
-      'startBrewForBeanByInternalShareCode',
-      'startBrewAndChoosePreparationMethodForBeanByInternalShareCode',
-      'repeatLastBrewForBeanByInternalShareCode',
-    ]);
     uiAlert = jasmine.createSpyObj('UIAlert', [
       'showLoadingSpinner',
       'hideLoadingSpinner',
       'showMessage',
       'isLoadingSpinnerShown',
+      'presentCustomPopover',
     ]);
     uiAnalytics = jasmine.createSpyObj('UIAnalytics', ['trackEvent']);
     visualizerService = jasmine.createSpyObj('VisualizerService', [
       'importShotWithSharedCode',
     ]);
     brewImportService = jasmine.createSpyObj('BrewImportService', ['import']);
+    beanStorage = jasmine.createSpyObj('UIBeanStorage', [
+      'attachOnEvent',
+      'getAllEntries',
+    ]);
+    millStorage = jasmine.createSpyObj('UIMillStorage', [
+      'attachOnEvent',
+      'getAllEntries',
+    ]);
+    preparationStorage = jasmine.createSpyObj('UIPreparationStorage', [
+      'attachOnEvent',
+      'getAllEntries',
+    ]);
+    brewStorage = jasmine.createSpyObj('UIBrewStorage', ['getAllEntries']);
+    settingsStorage = jasmine.createSpyObj('UISettingsStorage', [
+      'attachOnEvent',
+      'getSettings',
+    ]);
 
     uiHelper.isBeanconqurorAppReady.and.resolveTo();
     uiAlert.showLoadingSpinner.and.resolveTo();
     uiAlert.hideLoadingSpinner.and.resolveTo();
     uiAlert.isLoadingSpinnerShown.and.returnValue(false);
     brewImportService.import.and.resolveTo();
+    beanStorage.attachOnEvent.and.returnValue(eventEmitter as never);
+    millStorage.attachOnEvent.and.returnValue(eventEmitter as never);
+    preparationStorage.attachOnEvent.and.returnValue(eventEmitter as never);
+    settingsStorage.attachOnEvent.and.returnValue(eventEmitter as never);
+    settingsStorage.getSettings.and.returnValue(new Settings());
+    beanStorage.getAllEntries.and.returnValue([{ finished: false }] as never);
+    millStorage.getAllEntries.and.returnValue([]);
+    preparationStorage.getAllEntries.and.returnValue([
+      { finished: false },
+    ] as never);
 
     TestBed.configureTestingModule({
       providers: [
@@ -149,11 +189,28 @@ describe('IntentHandlerService', () => {
           useValue: serverCommunicationService,
         },
         { provide: UIBeanHelper, useValue: uiBeanHelper },
-        { provide: UIBrewHelper, useValue: uiBrewHelper },
+        UIBrewHelper,
         { provide: UIAlert, useValue: uiAlert },
         { provide: UIAnalytics, useValue: uiAnalytics },
         { provide: VisualizerService, useValue: visualizerService },
         { provide: BrewImportService, useValue: brewImportService },
+        { provide: UIBeanStorage, useValue: beanStorage },
+        { provide: UIMillStorage, useValue: millStorage },
+        { provide: UIPreparationStorage, useValue: preparationStorage },
+        { provide: UIBrewStorage, useValue: brewStorage },
+        { provide: UISettingsStorage, useValue: settingsStorage },
+        {
+          provide: TranslateService,
+          useValue: jasmine.createSpyObj('TranslateService', ['instant']),
+        },
+        {
+          provide: ModalController,
+          useValue: jasmine.createSpyObj('ModalController', ['create']),
+        },
+        {
+          provide: CoffeeBluetoothDevicesService,
+          useValue: {},
+        },
         {
           provide: NgZone,
           useValue: jasmine.createSpyObj('NgZone', {
@@ -168,14 +225,30 @@ describe('IntentHandlerService', () => {
     url = handoffUrl(await gzipBase64Url(envelope));
   });
 
-  it('blocks brew handoff import when the library cannot start a brew', async () => {
-    uiBrewHelper.canBrewIfNotShowMessage.and.returnValue(false);
+  it('imports a brew handoff when the user has no mill', async () => {
+    await service.handleDeepLink(url);
+
+    expect(brewImportService.import).toHaveBeenCalledOnceWith(envelope);
+    expect(uiAlert.showMessage).toHaveBeenCalledWith(
+      'BREW_IMPORT_SUCCESSFUL',
+      undefined,
+      undefined,
+      true,
+    );
+  });
+
+  it('blocks brew handoff import with the import message when no bean fallback exists', async () => {
+    beanStorage.getAllEntries.and.returnValue([]);
 
     await service.handleDeepLink(url);
 
-    expect(uiBrewHelper.canBrewIfNotShowMessage).toHaveBeenCalled();
     expect(brewImportService.import).not.toHaveBeenCalled();
     expect(uiAlert.showLoadingSpinner).not.toHaveBeenCalled();
+    expect(uiAlert.presentCustomPopover).toHaveBeenCalledWith(
+      'CANT_IMPORT_BREW_TITLE',
+      'CANT_IMPORT_BREW_DESCRIPTION',
+      'UNDERSTOOD',
+    );
     expect(uiAlert.showMessage).not.toHaveBeenCalledWith(
       'BREW_IMPORT_FAILED',
       'ERROR_OCCURED',
@@ -184,8 +257,41 @@ describe('IntentHandlerService', () => {
     );
   });
 
-  it('imports a brew handoff when the library can start a brew', async () => {
-    uiBrewHelper.canBrewIfNotShowMessage.and.returnValue(true);
+  it('blocks brew handoff import with the import message when no preparation fallback exists', async () => {
+    preparationStorage.getAllEntries.and.returnValue([]);
+
+    await service.handleDeepLink(url);
+
+    expect(brewImportService.import).not.toHaveBeenCalled();
+    expect(uiAlert.showLoadingSpinner).not.toHaveBeenCalled();
+    expect(uiAlert.presentCustomPopover).toHaveBeenCalledWith(
+      'CANT_IMPORT_BREW_TITLE',
+      'CANT_IMPORT_BREW_DESCRIPTION',
+      'UNDERSTOOD',
+    );
+    expect(uiAlert.showMessage).not.toHaveBeenCalledWith(
+      'BREW_IMPORT_FAILED',
+      'ERROR_OCCURED',
+      undefined,
+      true,
+    );
+  });
+
+  it('blocks brew handoff import when only archived beans are available', async () => {
+    beanStorage.getAllEntries.and.returnValue([{ finished: true }] as never);
+
+    await service.handleDeepLink(url);
+
+    expect(brewImportService.import).not.toHaveBeenCalled();
+    expect(uiAlert.presentCustomPopover).toHaveBeenCalledWith(
+      'CANT_IMPORT_BREW_TITLE',
+      'CANT_IMPORT_BREW_DESCRIPTION',
+      'UNDERSTOOD',
+    );
+  });
+
+  it('imports a brew handoff when the library can import a brew', async () => {
+    millStorage.getAllEntries.and.returnValue([{ finished: false }] as never);
 
     await service.handleDeepLink(url);
 
@@ -203,7 +309,6 @@ describe('IntentHandlerService', () => {
   });
 
   it('reports a brew handoff import failure after a decodable payload reaches import', async () => {
-    uiBrewHelper.canBrewIfNotShowMessage.and.returnValue(true);
     brewImportService.import.and.rejectWith(new Error('Import failed'));
 
     await service.handleDeepLink(url);
