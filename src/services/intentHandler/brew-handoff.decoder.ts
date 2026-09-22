@@ -23,14 +23,18 @@ export type {
 
 // A realistic 2,400-sample brew is roughly 60 KB JSON; 256 KiB leaves room for future hints without accepting zip bombs.
 const MAX_INFLATED_BYTES = 256 * 1024;
-// Real handoffs are around 11 chunks today; 1,024 keeps URL assembly finite while leaving protocol headroom.
+// Real handoffs are around 11 chunks today; 1,024 chunks of the sender's 400-character URL budget keep compressed payload assembly finite while leaving protocol headroom.
 const MAX_CHUNKS = 1024;
+const MAX_CHUNK_CHARS = 400;
+const MAX_PAYLOAD_CHARS = MAX_CHUNKS * MAX_CHUNK_CHARS;
 // Four times today's 2,400-sample trace is enough for long brews without letting arrays dominate the UI.
 const MAX_SERIES_POINTS = 10_000;
 // One day is far beyond a brew, but accepts paused/manual records without million-second accidents.
 const MAX_SECONDS = 86_400;
 // 200 g covers batch brewing; negative or larger values are not useful in a cup record.
 const MAX_DOSE_G = 200;
+// Big enough for urn-sized batches, small enough that one link cannot poison aggregate statistics.
+const MAX_BREW_QUANTITY = 100_000;
 // Temperature is schema-v1 bare Celsius; this range admits chilled brews and Fahrenheit senders without pretending to know their unit.
 const MIN_TEMPERATURE = -50;
 const MAX_TEMPERATURE = 250;
@@ -73,6 +77,11 @@ export function collectHandoffPayload(url: string): string {
   if (!Number.isSafeInteger(expectedLength)) {
     throw new Error('Brew handoff len is too large');
   }
+  if (expectedLength > MAX_PAYLOAD_CHARS) {
+    throw new Error(
+      `Brew handoff len must be at most ${MAX_PAYLOAD_CHARS} characters`,
+    );
+  }
 
   const chunkIndexes: number[] = [];
   params.forEach((_value, key) => {
@@ -98,6 +107,11 @@ export function collectHandoffPayload(url: string): string {
   let payload = '';
   uniqueIndexes.forEach((index) => {
     payload += params.get(`shareBrew${index}`) ?? '';
+    if (payload.length > MAX_PAYLOAD_CHARS) {
+      throw new Error(
+        `Brew handoff payload must be at most ${MAX_PAYLOAD_CHARS} characters`,
+      );
+    }
   });
 
   if (payload.length !== expectedLength) {
@@ -317,14 +331,14 @@ function validateBrew(value: unknown): IHandoffBrew {
       'ml',
       'Envelope brew.waterIn',
       0,
-      Number.MAX_SAFE_INTEGER,
+      MAX_BREW_QUANTITY,
     ),
     beverageOut: quantity(
       brew.beverageOut,
       'g',
       'Envelope brew.beverageOut',
       0,
-      Number.MAX_SAFE_INTEGER,
+      MAX_BREW_QUANTITY,
     ),
     brewTime: boundedNumber(
       brew.brewTime,
@@ -451,13 +465,18 @@ function validateMetric(value: unknown, index: number): IHandoffMetric {
     );
   }
 
+  const key = boundedString(
+    metric.key,
+    `Envelope metrics[${index}].key`,
+    1,
+    MAX_LABEL_LENGTH,
+  );
+  if (FORBIDDEN_RECORD_KEYS.has(key)) {
+    throw new Error(`Envelope metrics[${index}].key is not allowed`);
+  }
+
   return {
-    key: boundedString(
-      metric.key,
-      `Envelope metrics[${index}].key`,
-      1,
-      MAX_LABEL_LENGTH,
-    ),
+    key,
     name: boundedString(
       metric.name,
       `Envelope metrics[${index}].name`,
@@ -504,7 +523,10 @@ function sanitizeOpaqueObject(
   value: unknown,
   path: string,
 ): Record<string, unknown> {
-  return sanitizeOpaqueValue(value, path, 0) as Record<string, unknown>;
+  return sanitizeOpaqueValue(objectRecord(value, path), path, 0) as Record<
+    string,
+    unknown
+  >;
 }
 
 function sanitizeOpaqueValue(

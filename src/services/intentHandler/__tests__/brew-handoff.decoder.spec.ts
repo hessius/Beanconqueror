@@ -142,6 +142,25 @@ describe('brew handoff decoder', () => {
     ).toThrowError('Too many shareBrew chunks: maximum is 1024');
   });
 
+  it('rejects oversized compressed payloads before and during assembly', () => {
+    expect(() =>
+      collectHandoffPayload(
+        `beanconqueror://ADD_BREW?len=409601&shareBrew0=${'a'.repeat(
+          409601,
+        )}`,
+      ),
+    ).toThrowError('Brew handoff len must be at most 409600 characters');
+    expect(() =>
+      collectHandoffPayload(
+        `beanconqueror://ADD_BREW?len=409600&shareBrew0=${'a'.repeat(
+          409601,
+        )}`,
+      ),
+    ).toThrowError(
+      'Brew handoff payload must be at most 409600 characters',
+    );
+  });
+
   it('rejects assembled payload length mismatches', () => {
     const payload = 'a'.repeat(400);
 
@@ -375,6 +394,26 @@ describe('brew handoff decoder', () => {
     ).toBeRejectedWithError('Envelope bean contains too many keys');
   });
 
+  it('rejects non-object opaque blocks', async () => {
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          bean: 'Any coffee' as unknown as IHandoffEnvelope['bean'],
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope bean must be an object');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          imported: {
+            ...validEnvelope().imported,
+            params: 'abc' as unknown as IHandoffEnvelope['imported']['params'],
+          },
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope imported.params must be an object');
+  });
+
   it('rejects a well-formed envelope with no brew', async () => {
     await expectAsync(
       decodeEnvelope({ ...validEnvelope(), brew: undefined }),
@@ -417,6 +456,30 @@ describe('brew handoff decoder', () => {
       ),
     ).toBeRejectedWithError(
       'Envelope brew.doseIn.value must be between 0 and 200',
+    );
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: {
+            ...validEnvelope().brew,
+            waterIn: { value: 100001, unit: 'ml' },
+          },
+        }),
+      ),
+    ).toBeRejectedWithError(
+      'Envelope brew.waterIn.value must be between 0 and 100000',
+    );
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: {
+            ...validEnvelope().brew,
+            beverageOut: { value: 100001, unit: 'g' },
+          },
+        }),
+      ),
+    ).toBeRejectedWithError(
+      'Envelope brew.beverageOut.value must be between 0 and 100000',
     );
     await expectAsync(
       decodeEnvelope(
@@ -666,6 +729,13 @@ describe('brew handoff decoder', () => {
     ).toBeRejectedWithError(
       'Envelope metrics[0].t[0] must be between 0 and 86400000',
     );
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          metrics: [{ ...validEnvelope().metrics[0], key: '__proto__' }],
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope metrics[0].key is not allowed');
   });
 
   it('decodes a valid envelope and round trips through real gzip', async () => {

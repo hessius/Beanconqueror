@@ -39,7 +39,7 @@ describe('GraphHelperService custom axis names', () => {
       },
     ];
 
-    service.fillTraces(traces, graphSettings(), true);
+    service.fillTraces(traces, graphSettings(), true, false, brewFlow);
     service.fillDataIntoTraces(brewFlow, traces);
 
     expect(traces.customTraces.legacyPressure.name).toBe('Pressure');
@@ -63,7 +63,7 @@ describe('GraphHelperService custom axis names', () => {
       },
     ];
 
-    service.fillTraces(traces, graphSettings(), true);
+    service.fillTraces(traces, graphSettings(), true, false, brewFlow);
     service.fillDataIntoTraces(brewFlow, traces);
 
     expect(traces.customTraces.targetTemperature.name).toBe(

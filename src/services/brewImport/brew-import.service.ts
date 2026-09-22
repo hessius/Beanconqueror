@@ -17,6 +17,8 @@ import { UIMillStorage } from '../uiMillStorage';
 import { UIPreparationStorage } from '../uiPreparationStorage';
 import { UISettingsStorage } from '../uiSettingsStorage';
 
+const MAX_ABSOLUTE_MILLISECONDS = 24 * 60 * 60 * 1_000;
+
 export interface IBrewImportResult {
   brew: Brew;
   brewFlow: BrewFlow;
@@ -146,6 +148,7 @@ export class BrewImportService {
 
     const didUpdate = await this.brewStorage.update(addedBrew);
     if (!didUpdate) {
+      await this.brewStorage.removeByObject(addedBrew);
       throw new Error(`Imported brew update failed: ${addedBrew.config.uuid}`);
     }
 
@@ -181,6 +184,11 @@ export class BrewImportService {
 
     flow.t.forEach((timestampDelta, index) => {
       timestampMs += timestampDelta;
+      if (timestampMs > MAX_ABSOLUTE_MILLISECONDS) {
+        throw new Error(
+          `Envelope flow.t cumulative timestamp must be at most ${MAX_ABSOLUTE_MILLISECONDS}`,
+        );
+      }
       waterDispensed += flow.waterDispensed[index] / 10;
       weight += flow.weight[index] / 10;
 

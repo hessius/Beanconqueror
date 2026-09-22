@@ -154,6 +154,18 @@ class MemoryBrewStorage {
       return Promise.resolve(index >= 0);
     });
 
+  public removeByObject = jasmine
+    .createSpy('removeByObject')
+    .and.callFake((brew: Brew): Promise<boolean> => {
+      const index = this.entries.findIndex(
+        (entry) => entry.config.uuid === brew.config.uuid,
+      );
+      if (index >= 0) {
+        this.entries.splice(index, 1);
+      }
+      return Promise.resolve(index >= 0);
+    });
+
   public getEntryByUUID(uuid: string): Brew {
     const stored = this.entries.find((entry) => entry.config.uuid === uuid);
     return stored ? cloneBrew(stored) : null;
@@ -348,6 +360,23 @@ describe('BrewImportService', () => {
     expect(
       result.brewFlow.temperatureFlow.map((sample) => sample.old_temperature),
     ).toEqual([0, 91, 92]);
+  });
+
+  it('rejects flow deltas whose cumulative timestamp exceeds one day', () => {
+    expect(() =>
+      service.build(
+        envelope({
+          flow: {
+            fidelity: 'full',
+            t: [86400000, 1],
+            waterDispensed: [0, 100],
+            weight: [0, 50],
+          },
+        }),
+      ),
+    ).toThrowError(
+      'Envelope flow.t cumulative timestamp must be at most 86400000',
+    );
   });
 
   it('accepts a single flow sample', () => {
@@ -715,6 +744,8 @@ describe('BrewImportService', () => {
     await expectAsync(service.import(envelope())).toBeRejectedWithError(
       'Imported brew update failed: saved-brew',
     );
+    expect(brewStorage.getEntryByUUID('saved-brew')).toBeNull();
+    expect(brewStorage.removeByObject.calls.count()).toBe(1);
   });
 
   it('rejects without persisting when no bean or preparation fallback exists', async () => {

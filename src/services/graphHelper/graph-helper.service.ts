@@ -262,13 +262,15 @@ export class GraphHelperService {
       Object.keys(_rawData.customMetrics).length > 0
     ) {
       for (const key of Object.keys(_rawData.customMetrics)) {
-        customAxesToInit.push({
-          key: key,
-          name: key,
-          unit: '',
-          colorLight: getColor('customTrace', _isReference),
-          colorDark: getColor('customTrace', _isReference),
-        });
+        customAxesToInit.push(
+          _rawData.customAxes?.find((customAxis) => customAxis.key === key) ?? {
+            key: key,
+            name: key,
+            unit: '',
+            colorLight: getColor('customTrace', _isReference),
+            colorDark: getColor('customTrace', _isReference),
+          },
+        );
       }
     }
 
