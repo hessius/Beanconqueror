@@ -6,6 +6,11 @@ import { Observable, Subject } from 'rxjs';
 import { UILog } from '../services/uiLog';
 import { UIStorage } from '../services/uiStorage';
 
+export interface StorageClassAddResult {
+  entry: any;
+  saved: boolean;
+}
+
 export abstract class StorageClass {
   protected uiStorage = inject(UIStorage);
   protected uiLog = inject(UILog);
@@ -87,19 +92,33 @@ export abstract class StorageClass {
   }
 
   public async add(_entry): Promise<any> {
-    const promise = new Promise(async (resolve, reject) => {
+    const result = await this.addAndConfirm(_entry);
+    return result.entry;
+  }
+
+  /**
+   * Adds an entry and reports whether the changed collection reached disk.
+   *
+   * `add()` cannot carry that itself: it resolves the cloned entry, and its
+   * callers read `.config.uuid` off it, so there is nowhere to put the answer
+   * without breaking them. Callers that have to undo their work on a failed
+   * write use this instead.
+   */
+  public async addAndConfirm(_entry): Promise<StorageClassAddResult> {
+    const promise = new Promise<StorageClassAddResult>(async (resolve) => {
       const newEntry = StorageClass.cloneData(_entry);
+      let saved = false;
       try {
         newEntry.config.uuid = crypto.randomUUID();
         newEntry.config.unix_timestamp = StorageClass.getUnixTimestamp();
         this.storedData.push(newEntry);
-        await this.__save();
+        saved = await this.__save();
         this.__sendEvent('ADD');
       } catch (ex) {
         this.uiLog.error('Storage - Add - Unsuccessfully', ex);
         await this.showAlert(ex.message, 'ADD CRITICAL ERROR');
       }
-      resolve(StorageClass.cloneData(newEntry));
+      resolve({ entry: StorageClass.cloneData(newEntry), saved });
     });
     return promise;
   }
@@ -118,10 +137,15 @@ export abstract class StorageClass {
               `Storage - Update  - Successfully - ${_obj.config.uuid}`,
             );
             this.storedData[i] = _obj;
-            await this.__save();
+            const saved = await this.__save();
             this.__sendEvent('UPDATE');
             didUpdate = true;
-            resolve(true);
+            if (saved === false) {
+              this.uiLog.error(
+                `Storage - Update  - Unsucessfully - ${_obj.config.uuid} - save failed`,
+              );
+            }
+            resolve(saved);
             return;
           }
         }
@@ -252,10 +276,15 @@ export abstract class StorageClass {
           if (this.storedData[i].config.uuid === deleteUUID) {
             this.uiLog.log(`Storage - Delete - Successfully -${deleteUUID}`);
             this.storedData.splice(i, 1);
-            await this.__save();
+            const saved = await this.__save();
             this.__sendRemoveMessage(deleteUUID);
             this.__sendEvent('DELETE');
-            resolve(true);
+            if (saved === false) {
+              this.uiLog.error(
+                `Storage - Delete - Unsuccessfully - ${deleteUUID} - save failed`,
+              );
+            }
+            resolve(saved);
             return;
           }
         }
@@ -266,12 +295,13 @@ export abstract class StorageClass {
     return promise;
   }
 
-  private async __save() {
+  private async __save(): Promise<boolean> {
     try {
-      await this.uiStorage.set(this.DB_PATH, this.storedData).then(
+      return await this.uiStorage.set(this.DB_PATH, this.storedData).then(
         async (_saved) => {
           if (_saved === true) {
             this.uiLog.log('Storage - Save - Successfully');
+            return true;
           } else {
             this.uiLog.error('Storage - Save Set - Unsuccessfully', _saved);
             await this.showAlert(
@@ -279,16 +309,19 @@ export abstract class StorageClass {
                 JSON.stringify(_saved),
               'CRITICAL ERROR',
             );
+            return false;
           }
         },
         async (e) => {
           this.uiLog.error('Storage - Save Set Exception - Unsuccessfully', e);
           await this.showAlert(JSON.stringify(e), 'CRITICAL ERROR - SAVE SET');
+          return false;
         },
       );
     } catch (ex) {
       this.uiLog.error('Storage - Save - Unsuccessfully', ex);
       await this.showAlert(ex.message, 'CRITICAL ERROR');
+      return false;
     }
   }
 }
