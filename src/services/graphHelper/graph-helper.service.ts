@@ -493,7 +493,8 @@ export class GraphHelperService {
    * degrees, drawn on an axis from zero, is a straight line, and the steps
    * between stages, the reason the sender attached it at all, disappear. So a
    * custom axis is fitted to both ends of its own data with a little room
-   * either side, and falls back to a fixed range only when it has none.
+   * either side once it outgrows the fixed range. Data that already fits keeps
+   * the fixed range, so comparable brews do not redraw on unrelated scales.
    */
   private fittedCustomRange(
     values: number[] | undefined,
@@ -505,6 +506,9 @@ export class GraphHelperService {
     }
     const lowest = Math.min(...finite);
     const highest = Math.max(...finite);
+    if (lowest >= fallback[0] && highest <= fallback[1]) {
+      return fallback;
+    }
     if (lowest === highest) {
       // A flat series should read as visibly flat rather than leave Plotly a
       // zero-height axis to invent a range for.

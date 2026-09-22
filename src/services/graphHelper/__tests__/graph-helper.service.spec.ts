@@ -169,6 +169,52 @@ describe('GraphHelperService axis fitting', () => {
     expect(traceReferences.customTraces.targetTemperature.yaxis).toBe('y11');
   });
 
+  it('keeps the fixed custom range exactly when the series fits inside it', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([5, 10]),
+    };
+
+    const layout = layoutFor(service, traces, true);
+
+    expect(layout['yaxis11'].range).toEqual([0, 20]);
+  });
+
+  it('fits and pads a custom range when the series exceeds the fixed range', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([5, 21]),
+    };
+
+    const layout = layoutFor(service, traces, true);
+
+    expect(layout['yaxis11'].range).toEqual([3.4, 22.6]);
+  });
+
+  it('keeps the fixed custom range when the series reaches its upper boundary', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([5, 20]),
+    };
+
+    const layout = layoutFor(service, traces, true);
+
+    expect(layout['yaxis11'].range).toEqual([0, 20]);
+  });
+
+  it('keeps live custom axes pinned to zero when detail axes fit below zero', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([-5, 21]),
+    };
+
+    const liveLayout = layoutFor(service, traces, false);
+    const detailLayout = layoutFor(service, traces, true);
+
+    expect(liveLayout['yaxis11'].range).toEqual([0, 23.6]);
+    expect(detailLayout['yaxis11'].range).toEqual([-7.6, 23.6]);
+  });
+
   it('leaves the active custom axis unchanged when the reference has no matching key', () => {
     const traces = filledTraces(service);
     const traceReferences = filledTraces(service);
@@ -210,9 +256,9 @@ describe('GraphHelperService axis fitting', () => {
 
   it('keeps the default water axis for a pour that just reaches it', () => {
     // The headroom must not apply below the default, or an ordinary brew
-    // peaking in the high nineties would silently redraw on [0, 101].
+    // peaking at the boundary would silently redraw on [0, 105].
     const traces = filledTraces(service);
-    traces.waterDispensedTrace.y = [0, 60, 98];
+    traces.waterDispensedTrace.y = [0, 60, 100];
 
     const layout = layoutFor(service, traces, true);
 
