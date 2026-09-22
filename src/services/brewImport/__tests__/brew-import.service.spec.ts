@@ -406,6 +406,40 @@ describe('BrewImportService', () => {
     );
   });
 
+  it('rejects flow deltas whose cumulative water total overflows', () => {
+    expect(() =>
+      service.build(
+        envelope({
+          flow: {
+            fidelity: 'full',
+            t: [0, 1000],
+            waterDispensed: [Number.MAX_VALUE, Number.MAX_VALUE],
+            weight: [0, 0],
+          },
+        }),
+      ),
+    ).toThrowError(
+      'Envelope flow.waterDispensed cumulative total must be at most 100000',
+    );
+  });
+
+  it('rejects flow deltas whose cumulative weight total overflows', () => {
+    expect(() =>
+      service.build(
+        envelope({
+          flow: {
+            fidelity: 'full',
+            t: [0, 1000],
+            waterDispensed: [0, 0],
+            weight: [Number.MAX_VALUE, Number.MAX_VALUE],
+          },
+        }),
+      ),
+    ).toThrowError(
+      'Envelope flow.weight cumulative total must be at most 100000',
+    );
+  });
+
   it('accepts a single flow sample', () => {
     const result = service.build(
       envelope({

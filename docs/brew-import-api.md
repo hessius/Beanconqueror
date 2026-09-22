@@ -115,8 +115,8 @@ Quantity objects have this shape:
 | ---------------- | -------- | -------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `fidelity`       | string   | yes      |                                     | Must be `full` or `downsampled`.                                                                                            |
 | `t`              | number[] | yes      | milliseconds                        | Delta coded time since the previous sample. Each entry must be finite and between 0 and 86,400,000. At most 10,000 entries. |
-| `waterDispensed` | number[] | yes      | decigrams since the previous sample | Must have the same length as `t`. Each entry must be finite. The importer divides by 10 and accumulates grams.              |
-| `weight`         | number[] | yes      | decigrams since the previous sample | Must have the same length as `t`. Each entry must be finite. The importer divides by 10 and accumulates grams.              |
+| `waterDispensed` | number[] | yes      | decigrams since the previous sample | Must have the same length as `t`. Each entry must be finite. The importer divides by 10 and accumulates grams. The running total must stay within 100,000 g.              |
+| `weight`         | number[] | yes      | decigrams since the previous sample | Must have the same length as `t`. Each entry must be finite. The importer divides by 10 and accumulates grams. The running total must stay within 100,000 g.              |
 | `temperature`    | number[] | no       | degrees Celsius                     | Must have the same length as `t` when present. Each entry must be finite. Values are absolute per sample.                   |
 
 `flow.t` is delta coded on the wire. The import service accumulates it into an

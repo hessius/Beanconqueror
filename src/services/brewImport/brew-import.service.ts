@@ -19,6 +19,7 @@ import { UIPreparationStorage } from '../uiPreparationStorage';
 import { UISettingsStorage } from '../uiSettingsStorage';
 
 const MAX_ABSOLUTE_MILLISECONDS = 24 * 60 * 60 * 1_000;
+const MAX_ABSOLUTE_GRAMS = 100_000;
 
 export interface IBrewImportResult {
   brew: Brew;
@@ -213,6 +214,14 @@ export class BrewImportService {
     return brewFlow;
   }
 
+  private assertWithinGramLimit(total: number, field: string): void {
+    if (Math.abs(total) > MAX_ABSOLUTE_GRAMS) {
+      throw new Error(
+        `Envelope ${field} cumulative total must be at most ${MAX_ABSOLUTE_GRAMS}`,
+      );
+    }
+  }
+
   private assignFlowSamples(brewFlow: BrewFlow, flow: IHandoffFlow): void {
     let timestampMs = 0;
     let waterDispensed = 0;
@@ -230,6 +239,8 @@ export class BrewImportService {
       }
       waterDispensed += flow.waterDispensed[index] / 10;
       weight += flow.weight[index] / 10;
+      this.assertWithinGramLimit(waterDispensed, 'flow.waterDispensed');
+      this.assertWithinGramLimit(weight, 'flow.weight');
 
       const timestamp = this.formatTimestamp(timestampMs);
       const brewTime = this.formatBrewTime(timestampMs);
