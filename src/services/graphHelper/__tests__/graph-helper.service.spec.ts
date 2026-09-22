@@ -215,6 +215,72 @@ describe('GraphHelperService axis fitting', () => {
     expect(detailLayout['yaxis11'].range).toEqual([-7.6, 23.6]);
   });
 
+  it('keeps an all-negative custom series fitted on the live chart', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([-8, -5, -6]),
+    };
+
+    const liveLayout = layoutFor(service, traces, false);
+
+    expect(liveLayout['yaxis11'].range).toEqual([-8.3, -4.7]);
+    expect(liveLayout['yaxis11'].range[0]).toBeLessThan(
+      liveLayout['yaxis11'].range[1],
+    );
+  });
+
+  it('keeps the detail chart fitted for an all-negative custom series', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([-8, -5, -6]),
+    };
+
+    const detailLayout = layoutFor(service, traces, true);
+
+    expect(detailLayout['yaxis11'].range).toEqual([-8.3, -4.7]);
+  });
+
+  it('uses the fixed custom range for an exactly zero live series', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([0, 0, 0]),
+    };
+
+    const liveLayout = layoutFor(service, traces, false);
+    const detailLayout = layoutFor(service, traces, true);
+
+    expect(liveLayout['yaxis11'].range).toEqual([0, 20]);
+    expect(detailLayout['yaxis11'].range).toEqual([0, 20]);
+  });
+
+  it('keeps an empty live custom series on the fixed range', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([]),
+    };
+
+    const liveLayout = layoutFor(service, traces, false);
+
+    expect(liveLayout['yaxis11'].range).toEqual([0, 20]);
+    expect(liveLayout['yaxis11'].range[0]).toBeLessThan(
+      liveLayout['yaxis11'].range[1],
+    );
+  });
+
+  it('keeps a flat negative live custom series visible', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([-5, -5, -5]),
+    };
+
+    const liveLayout = layoutFor(service, traces, false);
+
+    expect(liveLayout['yaxis11'].range).toEqual([-6, -4]);
+    expect(liveLayout['yaxis11'].range[0]).toBeLessThan(
+      liveLayout['yaxis11'].range[1],
+    );
+  });
+
   it('leaves the active custom axis unchanged when the reference has no matching key', () => {
     const traces = filledTraces(service);
     const traceReferences = filledTraces(service);

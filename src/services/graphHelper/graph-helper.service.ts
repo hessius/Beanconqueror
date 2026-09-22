@@ -518,6 +518,27 @@ export class GraphHelperService {
     return [lowest - padding, highest + padding];
   }
 
+  private visibleRange(range: [number, number]): [number, number] {
+    if (range[0] < range[1]) {
+      return range;
+    }
+    if (range[0] === range[1]) {
+      return [range[0] - 1, range[1] + 1];
+    }
+    return [range[1], range[0]];
+  }
+
+  private liveCustomRange(
+    values: number[],
+    fittedRange: [number, number],
+  ): [number, number] {
+    const finite = values.filter((value) => Number.isFinite(value));
+    if (finite.length > 0 && finite.every((value) => value < 0)) {
+      return fittedRange;
+    }
+    return [0, fittedRange[1]];
+  }
+
   private combinedTraceValues(...traces: any[]): number[] {
     return traces.flatMap((trace) => (Array.isArray(trace?.y) ? trace.y : []));
   }
@@ -931,6 +952,11 @@ export class GraphHelperService {
         }
         const fittedValues = this.combinedTraceValues(trace, referenceTrace);
         const fittedRange = this.fittedCustomRange(fittedValues, [0, 20]);
+        const range = this.visibleRange(
+          _isDetail
+            ? fittedRange
+            : this.liveCustomRange(fittedValues, fittedRange),
+        );
         layout[yAxisKey] = {
           title: '',
           titlefont: { color: trace.line.color },
@@ -942,7 +968,7 @@ export class GraphHelperService {
           position: axisPositionOffset,
           fixedrange: !_isDetail,
           visible: _isDetail ? true : trace.visible,
-          range: _isDetail ? fittedRange : [0, fittedRange[1]],
+          range,
         };
         if (!_isDetail) {
           layout[yAxisKey].visible =
