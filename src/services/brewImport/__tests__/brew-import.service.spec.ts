@@ -508,6 +508,44 @@ describe('BrewImportService', () => {
     expect(beanStorage.add.calls.count()).toBe(0);
   });
 
+  it('will not link an archived bean, even on an exact name match', () => {
+    const beans = [
+      entry(new Bean(), 'Ethiopia Guji', 'bean-old'),
+      entry(new Bean(), 'Alpha coffee', 'bean-a'),
+    ];
+    beans[0].finished = true;
+    beanStorage.getAllEntries.and.returnValue(beans);
+    beanStorage.getByUUID.and.callFake((uuid: string) =>
+      beans.find((bean) => bean.config.uuid === uuid),
+    );
+
+    const result = service.build(
+      envelope({ bean: { name: 'Ethiopia Guji' } }),
+    );
+
+    expect(result.brew.bean).toBe('bean-a');
+    expect(beanStorage.add.calls.count()).toBe(0);
+  });
+
+  it('will not widen onto an archived bean either', () => {
+    const beans = [
+      entry(new Bean(), 'Ethiopia Guji Natural', 'bean-old'),
+      entry(new Bean(), 'Alpha coffee', 'bean-a'),
+    ];
+    beans[0].finished = true;
+    beanStorage.getAllEntries.and.returnValue(beans);
+    beanStorage.getByUUID.and.callFake((uuid: string) =>
+      beans.find((bean) => bean.config.uuid === uuid),
+    );
+
+    const result = service.build(
+      envelope({ bean: { name: 'Ethiopia Guji' } }),
+    );
+
+    expect(result.brew.bean).toBe('bean-a');
+    expect(beanStorage.add.calls.count()).toBe(0);
+  });
+
   it('ignores a non-string bean name from an opaque decoded bean and falls back safely', () => {
     const result = service.build(envelope({ bean: { name: 42 } }));
 

@@ -282,7 +282,8 @@ export class BrewImportService {
     hintedName: string,
     label: string,
   ): INameMatchResult {
-    const fallback = this.firstUsableEntry(entries);
+    const usable = this.usableEntries(entries);
+    const fallback = this.firstUsableEntry(usable);
     const fallbackNote = (reason: string): INameMatchResult => {
       if (!fallback) {
         throw new Error(`${label} not linked: no available ${label}.`);
@@ -303,7 +304,7 @@ export class BrewImportService {
       return fallbackNote('missing name');
     }
 
-    const matches = entries.filter(
+    const matches = usable.filter(
       (entry) => this.normalizeName(entry.name) === normalizedHint,
     );
     if (matches.length === 1) {
@@ -311,7 +312,7 @@ export class BrewImportService {
     }
 
     if (matches.length === 0) {
-      const wider = this.findUniqueModelMatch(entries, normalizedHint);
+      const wider = this.findUniqueModelMatch(usable, normalizedHint);
       if (wider) {
         return {
           uuid: wider.config.uuid,
@@ -329,12 +330,13 @@ export class BrewImportService {
     hintedName: string,
     label: string,
   ): INameMatchResult {
+    const usable = this.usableEntries(entries);
     const normalizedHint = this.normalizeName(hintedName);
     if (!normalizedHint) {
       return { uuid: '' };
     }
 
-    const matches = entries.filter(
+    const matches = usable.filter(
       (entry) => this.normalizeName(entry.name) === normalizedHint,
     );
     if (matches.length === 1) {
@@ -342,7 +344,7 @@ export class BrewImportService {
     }
 
     if (matches.length === 0) {
-      const wider = this.findUniqueModelMatch(entries, normalizedHint);
+      const wider = this.findUniqueModelMatch(usable, normalizedHint);
       if (wider) {
         return {
           uuid: wider.config.uuid,
@@ -398,12 +400,21 @@ export class BrewImportService {
     return candidates.length === 1 ? candidates[0] : undefined;
   }
 
+  // A finished bean or preparation is archived, and `canBrew()` will not brew
+  // with one. Linking an imported brew to an archived entry files the brew
+  // itself under the archive, where the user is unlikely to look for it. So the
+  // importer only ever sees entries it is allowed to link to, and every path
+  // below -- exact name, widened model name, and the default -- narrows first.
+  private usableEntries(entries: IStoredNamedEntry[]): IStoredNamedEntry[] {
+    return entries.filter((entry) => !entry.finished);
+  }
+
   private firstUsableEntry(
     entries: IStoredNamedEntry[],
   ): IStoredNamedEntry | undefined {
-    return entries
-      .filter((entry) => !entry.finished)
-      .sort((a, b) => a.name.localeCompare(b.name))[0];
+    return this.usableEntries(entries).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )[0];
   }
 
   private normalizeName(name: string): string {
