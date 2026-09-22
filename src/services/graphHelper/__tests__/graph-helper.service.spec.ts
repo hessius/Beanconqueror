@@ -70,6 +70,34 @@ describe('GraphHelperService custom axis names', () => {
       'Target: Temperature',
     );
   });
+
+  it('fills custom metric traces when the brew flow contains only metrics', () => {
+    const traces = service.initializeTraces();
+    const brewFlow = new BrewFlow();
+    brewFlow.customMetrics.targetTemperature = [
+      { value: 93, timestamp: '00:00:00.000', brew_time: '0.000' },
+      { value: 91, timestamp: '00:00:45.000', brew_time: '45.000' },
+    ];
+    brewFlow.customAxes = [
+      {
+        key: 'targetTemperature',
+        namePrefix: 'BREW_IMPORT_METRIC_TARGET',
+        name: 'Temperature',
+        unit: '°C',
+        colorLight: '#000000',
+        colorDark: '#ffffff',
+      },
+    ];
+
+    service.fillTraces(traces, graphSettings(), true, false, brewFlow);
+    service.fillDataIntoTraces(brewFlow, traces);
+
+    expect(traces.customTraces.targetTemperature.name).toBe(
+      'Target: Temperature',
+    );
+    expect(traces.customTraces.targetTemperature.y).toEqual([93, 91]);
+    expect(traces.customTraces.targetTemperature.x.length).toBe(2);
+  });
 });
 
 describe('GraphHelperService axis fitting', () => {

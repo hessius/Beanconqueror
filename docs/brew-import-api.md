@@ -89,8 +89,8 @@ provenance.
 | ------------------- | -------- | -------- | ------------------ | ----------------------------------------------------------------------------------- |
 | `date`              | string   | yes      | ISO 8601 timestamp | Must match the decoder's ISO 8601 pattern and parse to a finite date.               |
 | `doseIn`            | quantity | no       | `g`                | Value must be finite and between 0 and 200. Unit must be `g`.                       |
-| `waterIn`           | quantity | yes      | `ml`               | Value must be finite and non negative. Unit must be `ml`.                           |
-| `beverageOut`       | quantity | yes      | `g`                | Value must be finite and non negative. Unit must be `g`.                            |
+| `waterIn`           | quantity | yes      | `ml`               | Value must be finite and between 0 and 100,000. Unit must be `ml`.                  |
+| `beverageOut`       | quantity | yes      | `g`                | Value must be finite and between 0 and 100,000. Unit must be `g`.                   |
 | `brewTime`          | number   | yes      | seconds            | Finite, 0 to 86,400. Fractions are allowed.                                         |
 | `temperature`       | number   | no       | degrees Celsius    | Finite, -50 to 250. Schema v1 is a bare Celsius number.                             |
 | `ratio`             | number   | no       |                    | Finite and non negative.                                                            |
