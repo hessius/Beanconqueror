@@ -25,6 +25,28 @@ class TestStorage extends StorageClass {
   }
 }
 
+class ThrowingPreparationStorage extends TestStorage {
+  protected override prepareEntryForStorage(_entry: any): any {
+    throw new Error('prepare failed');
+  }
+}
+
+async function expectSettled<T>(promise: Promise<T>): Promise<T> {
+  const pending = Symbol('pending');
+  const result = await Promise.race([
+    promise,
+    new Promise<typeof pending>((resolve) => {
+      setTimeout(() => resolve(pending), 100);
+    }),
+  ]);
+
+  if (result === pending) {
+    fail('Expected promise to settle before the timeout');
+  }
+
+  return result as T;
+}
+
 describe('StorageClass', () => {
   let storage: TestStorage;
   let mockUIStorage: jasmine.SpyObj<UIStorage>;
@@ -172,6 +194,66 @@ describe('StorageClass', () => {
     expect(storage.getAllEntries()[0].config.uuid).toBe(result.config.uuid);
     expect(mockUIAlert.showMessage).toHaveBeenCalledWith(
       'Storage - Save Set - Unsuccessfully  - false',
+      'CRITICAL ERROR',
+    );
+  });
+
+  it('resolves addAndConfirm as an unsaved add when preparation throws', async () => {
+    mockUIStorage.set.and.returnValue(Promise.resolve(true));
+    storage = TestBed.runInInjectionContext(
+      () => new ThrowingPreparationStorage(),
+    );
+    const newEntry = entry();
+
+    const result = await expectSettled(storage.addAndConfirm(newEntry));
+
+    expect(result.saved).toBeFalse();
+    expect(result.entry).not.toBe(newEntry);
+    expect(result.entry.config.uuid).toEqual(jasmine.any(String));
+    expect(mockUIStorage.set).not.toHaveBeenCalled();
+    expect(mockUILog.errors).toContain('Storage - Add - Unsuccessfully');
+    expect(mockUIAlert.showMessage).toHaveBeenCalledWith(
+      'prepare failed',
+      'ADD CRITICAL ERROR',
+    );
+  });
+
+  it('resolves update as an unsaved update when preparation throws', async () => {
+    mockUIStorage.set.and.returnValue(Promise.resolve(true));
+    storage = TestBed.runInInjectionContext(
+      () => new ThrowingPreparationStorage(),
+    );
+
+    const result = await expectSettled(storage.update(entry('update-uuid')));
+
+    expect(result).toBeFalse();
+    expect(mockUIStorage.set).not.toHaveBeenCalled();
+    expect(mockUILog.errors).toContain(
+      'Storage - Update  - Unsucessfully - Execption occured',
+    );
+    expect(mockUIAlert.showMessage).toHaveBeenCalledWith(
+      'Storage - Update  - Unsucessfully - Execption occured - prepare failed',
+      'CRITICAL ERROR',
+    );
+  });
+
+  it('resolves removeByUUID as an unsaved delete when stored data has an unexpected shape', async () => {
+    mockUIStorage.set.and.returnValue(Promise.resolve(true));
+    const malformedEntry = {};
+    Object.defineProperty(malformedEntry, 'config', {
+      get: () => {
+        throw new Error('stored shape failed');
+      },
+    });
+    storage.setEntries([malformedEntry]);
+
+    const result = await expectSettled(storage.removeByUUID('delete-uuid'));
+
+    expect(result).toBeFalse();
+    expect(mockUIStorage.set).not.toHaveBeenCalled();
+    expect(mockUILog.errors).toContain('Storage - Delete - Unsuccessfully');
+    expect(mockUIAlert.showMessage).toHaveBeenCalledWith(
+      'stored shape failed',
       'CRITICAL ERROR',
     );
   });

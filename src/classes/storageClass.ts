@@ -52,6 +52,35 @@ export abstract class StorageClass {
     UIAlert.getInstance()?.showMessage(message, title);
   }
 
+  private async showAlertSafely(
+    message: string,
+    title?: string,
+  ): Promise<void> {
+    try {
+      await this.showAlert(message, title);
+    } catch (ex) {
+      this.uiLog.error('Storage - Alert - Unsuccessfully', ex);
+    }
+  }
+
+  private createFailedAddEntry(_entry: any): any {
+    const failedEntry =
+      _entry !== null && typeof _entry === 'object'
+        ? StorageClass.cloneData(_entry)
+        : {};
+    if (
+      failedEntry.config === null ||
+      failedEntry.config === undefined ||
+      typeof failedEntry.config !== 'object'
+    ) {
+      failedEntry.config = {};
+    }
+    failedEntry.config.uuid = failedEntry.config.uuid ?? crypto.randomUUID();
+    failedEntry.config.unix_timestamp =
+      failedEntry.config.unix_timestamp ?? StorageClass.getUnixTimestamp();
+    return failedEntry;
+  }
+
   public async initializeStorage() {
     await this.__initializeStorage();
   }
@@ -109,24 +138,23 @@ export abstract class StorageClass {
    * write use this instead.
    */
   public async addAndConfirm(_entry): Promise<StorageClassAddResult> {
-    const promise = new Promise<StorageClassAddResult>(async (resolve) => {
-      const newEntry = StorageClass.cloneData(
+    let newEntry: any;
+    let saved = false;
+    try {
+      newEntry = StorageClass.cloneData(
         this.prepareEntryForStorage(_entry),
       );
-      let saved = false;
-      try {
-        newEntry.config.uuid = crypto.randomUUID();
-        newEntry.config.unix_timestamp = StorageClass.getUnixTimestamp();
-        this.storedData.push(newEntry);
-        saved = await this.__save();
-        this.__sendEvent('ADD');
-      } catch (ex) {
-        this.uiLog.error('Storage - Add - Unsuccessfully', ex);
-        await this.showAlert(ex.message, 'ADD CRITICAL ERROR');
-      }
-      resolve({ entry: StorageClass.cloneData(newEntry), saved });
-    });
-    return promise;
+      newEntry.config.uuid = crypto.randomUUID();
+      newEntry.config.unix_timestamp = StorageClass.getUnixTimestamp();
+      this.storedData.push(newEntry);
+      saved = await this.__save();
+      this.__sendEvent('ADD');
+    } catch (ex) {
+      newEntry = this.createFailedAddEntry(newEntry ?? _entry);
+      this.uiLog.error('Storage - Add - Unsuccessfully', ex);
+      await this.showAlertSafely(ex.message, 'ADD CRITICAL ERROR');
+    }
+    return { entry: StorageClass.cloneData(newEntry), saved };
   }
 
   public getAllEntries(): Array<any> {
@@ -134,65 +162,61 @@ export abstract class StorageClass {
   }
 
   public async update(_obj): Promise<boolean> {
-    const promise: Promise<any> = new Promise(async (resolve, reject) => {
-      try {
-        const updatedObj = this.prepareEntryForStorage(_obj);
-        let didUpdate: boolean = false;
-        for (let i = 0; i < this.storedData.length; i++) {
-          if (this.storedData[i].config.uuid === updatedObj.config.uuid) {
-            this.uiLog.log(
-              `Storage - Update  - Successfully - ${updatedObj.config.uuid}`,
+    try {
+      const updatedObj = this.prepareEntryForStorage(_obj);
+      let didUpdate: boolean = false;
+      for (let i = 0; i < this.storedData.length; i++) {
+        if (this.storedData[i].config.uuid === updatedObj.config.uuid) {
+          this.uiLog.log(
+            `Storage - Update  - Successfully - ${updatedObj.config.uuid}`,
+          );
+          this.storedData[i] = updatedObj;
+          const saved = await this.__save();
+          this.__sendEvent('UPDATE');
+          didUpdate = true;
+          if (saved === false) {
+            this.uiLog.error(
+              `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - save failed`,
             );
-            this.storedData[i] = updatedObj;
-            const saved = await this.__save();
-            this.__sendEvent('UPDATE');
-            didUpdate = true;
-            if (saved === false) {
-              this.uiLog.error(
-                `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - save failed`,
-              );
-            }
-            resolve(saved);
-            return;
           }
+          return saved;
         }
-        if (didUpdate === false) {
-          this.uiLog.error(
-            `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - not found`,
-          );
-          await this.showAlert(
-            `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - not found`,
-            'CRITICAL ERROR',
-          );
-        }
-        resolve(false);
-      } catch (ex) {
+      }
+      if (didUpdate === false) {
         this.uiLog.error(
-          'Storage - Update  - Unsucessfully - Execption occured',
-          ex,
+          `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - not found`,
         );
-        await this.showAlert(
-          `Storage - Update  - Unsucessfully - Execption occured - ${ex.message}`,
+        await this.showAlertSafely(
+          `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - not found`,
           'CRITICAL ERROR',
         );
-        resolve(false);
       }
-    });
-    return promise;
+      return false;
+    } catch (ex) {
+      this.uiLog.error(
+        'Storage - Update  - Unsucessfully - Execption occured',
+        ex,
+      );
+      await this.showAlertSafely(
+        `Storage - Update  - Unsucessfully - Execption occured - ${ex.message}`,
+        'CRITICAL ERROR',
+      );
+      return false;
+    }
   }
 
   public async removeByObject(_obj: any): Promise<boolean> {
-    const promise: Promise<boolean> = new Promise(async (resolve, reject) => {
+    try {
       if (_obj !== null && _obj !== undefined && _obj.config.uuid) {
         const deleteUUID = _obj.config.uuid;
 
-        const deletedBool: boolean = await this.__delete(deleteUUID);
-        resolve(deletedBool);
-      } else {
-        resolve(false);
+        return await this.__delete(deleteUUID);
       }
-    });
-    return promise;
+      return false;
+    } catch (ex) {
+      this.uiLog.error('Storage - Delete - Unsuccessfully', ex);
+      return false;
+    }
   }
 
   public getByUUID(_uuid: string): any {
@@ -207,15 +231,15 @@ export abstract class StorageClass {
   }
 
   public async removeByUUID(_beanUUID: string): Promise<boolean> {
-    const promise: Promise<boolean> = new Promise(async (resolve, reject) => {
+    try {
       if (_beanUUID !== null && _beanUUID !== undefined && _beanUUID !== '') {
-        const deletedBool: boolean = await this.__delete(_beanUUID);
-        resolve(deletedBool);
-      } else {
-        resolve(false);
+        return await this.__delete(_beanUUID);
       }
-    });
-    return promise;
+      return false;
+    } catch (ex) {
+      this.uiLog.error('Storage - Delete - Unsuccessfully', ex);
+      return false;
+    }
   }
 
   public attachOnRemove(): Observable<any> {
@@ -275,8 +299,8 @@ export abstract class StorageClass {
     return promise;
   }
 
-  private __delete(_uuid: string): Promise<boolean> {
-    const promise: Promise<boolean> = new Promise(async (resolve, reject) => {
+  private async __delete(_uuid: string): Promise<boolean> {
+    try {
       if (_uuid !== null && _uuid !== undefined && _uuid !== '') {
         const deleteUUID = _uuid;
         for (let i = 0; i < this.storedData.length; i++) {
@@ -291,15 +315,17 @@ export abstract class StorageClass {
                 `Storage - Delete - Unsuccessfully - ${deleteUUID} - save failed`,
               );
             }
-            resolve(saved);
-            return;
+            return saved;
           }
         }
       }
       this.uiLog.error('Storage - Delete - Unsuccessfully');
-      resolve(false);
-    });
-    return promise;
+      return false;
+    } catch (ex) {
+      this.uiLog.error('Storage - Delete - Unsuccessfully', ex);
+      await this.showAlertSafely(ex.message, 'CRITICAL ERROR');
+      return false;
+    }
   }
 
   private async __save(): Promise<boolean> {
@@ -311,7 +337,7 @@ export abstract class StorageClass {
             return true;
           } else {
             this.uiLog.error('Storage - Save Set - Unsuccessfully', _saved);
-            await this.showAlert(
+            await this.showAlertSafely(
               'Storage - Save Set - Unsuccessfully  - ' +
                 JSON.stringify(_saved),
               'CRITICAL ERROR',
@@ -321,13 +347,16 @@ export abstract class StorageClass {
         },
         async (e) => {
           this.uiLog.error('Storage - Save Set Exception - Unsuccessfully', e);
-          await this.showAlert(JSON.stringify(e), 'CRITICAL ERROR - SAVE SET');
+          await this.showAlertSafely(
+            JSON.stringify(e),
+            'CRITICAL ERROR - SAVE SET',
+          );
           return false;
         },
       );
     } catch (ex) {
       this.uiLog.error('Storage - Save - Unsuccessfully', ex);
-      await this.showAlert(ex.message, 'CRITICAL ERROR');
+      await this.showAlertSafely(ex.message, 'CRITICAL ERROR');
       return false;
     }
   }
