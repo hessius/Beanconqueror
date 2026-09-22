@@ -60,12 +60,12 @@ falls back to zip.js inflation on older WebKit, decodes text with fatal UTF 8
 decoding, then parses JSON.
 
 The inflate is capped, because the payload is attacker controlled gzip and an
-uncapped inflate is a zip bomb. A single brew may inflate to 256 KiB and a
+uncapped inflate is a zip bomb. A single brew may inflate to 512 KiB and a
 batch to 4 MiB. The two differ because a batch carries up to 50 whole
 envelopes: fifty realistic 60 KB brews are roughly three megabytes of ordinary
-JSON, inside the batch cap with headroom. The larger figure is still a hard
-post-inflate limit, so oversized gzip output is rejected before validation or
-storage.
+JSON, inside the 4 MiB batch cap with headroom. The larger figure is still a
+hard post-inflate limit, so oversized gzip output is rejected before validation
+or storage.
 
 A sender should apply the same two limits before it builds a link. The URL
 length is almost never what stops a batch: fifty brews assemble into roughly
@@ -456,10 +456,12 @@ The metric creates a custom axis with key `targetTemperature`, name
 
 The receiver's hard limits are in `brew-handoff.decoder.ts`:
 
-- Inflated JSON is capped at 524,288 bytes.
+- Single-brew inflated JSON is capped at 524,288 bytes.
+- Batch inflated JSON is capped at 4,194,304 bytes.
 - Each `shareBrew` chunk is capped at 400 characters.
 - There may be at most 1,024 `shareBrew` chunks, for an aggregate
   409,600-character payload backstop.
+- A batch may contain at most 50 brews.
 - Flow and metric series are capped at 10,000 points each.
 - The route validates `len` against the assembled payload length.
 
@@ -530,7 +532,8 @@ and shows the generic `BREW_IMPORT_FAILED` alert.
 | Not unpadded base64url                                     | `Payload is not unpadded base64url`                                          | Use base64url without `=` padding.                                           |
 | `DecompressionStream` unavailable                          | No sender-visible error                                                      | The decoder falls back to zip.js inflation for iOS 16.0 to 16.3.             |
 | Bytes are not gzip                                         | `Payload is not gzip`                                                        | Compress with gzip, not zlib, raw deflate, or plain JSON.                    |
-| Inflated payload exceeds cap                               | `Inflated payload exceeds 524288 bytes`                                      | Reduce JSON size.                                                            |
+| Single-brew inflated payload exceeds cap                   | `Inflated payload exceeds 524288 bytes`                                      | Reduce JSON size.                                                            |
+| Batch inflated payload exceeds cap                         | `Inflated payload exceeds 4194304 bytes`                                     | Reduce batch size or split it into smaller handoffs.                         |
 | Inflated bytes are not UTF 8                               | `Inflated payload is not UTF-8`                                              | Encode JSON as UTF 8.                                                        |
 | Inflated text is not JSON                                  | `Inflated payload is not JSON`                                               | Send a JSON object.                                                          |
 | Top level value is not an object                           | `Envelope must be an object`                                                 | Send an object envelope.                                                     |
@@ -589,7 +592,8 @@ controlled. The decoder's defences are:
 - It accepts only unpadded base64url.
 - It inflates through `readCapped()`, which reads the gzip stream chunk by
   chunk, tracks the total inflated bytes, cancels the reader when the total
-  exceeds 524,288 bytes, and throws before parsing JSON.
+  exceeds 524,288 bytes for a single brew or 4,194,304 bytes for a batch, and
+  throws before parsing JSON.
 - It uses fatal UTF 8 decoding.
 - It sanitises opaque objects by rebuilding them and dropping
   `__proto__`, `constructor`, and `prototype`.
