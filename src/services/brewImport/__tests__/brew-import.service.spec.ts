@@ -12,6 +12,7 @@ import { decodeHandoffPayload } from '../../intentHandler/brew-handoff.decoder';
 import { UIBeanStorage } from '../../uiBeanStorage';
 import { UIBrewStorage } from '../../uiBrewStorage';
 import { UIFileHelper } from '../../uiFileHelper';
+import { UILog } from '../../uiLog';
 import { UIMillStorage } from '../../uiMillStorage';
 import { UIPreparationStorage } from '../../uiPreparationStorage';
 import { UISettingsStorage } from '../../uiSettingsStorage';
@@ -128,6 +129,7 @@ async function encodeEnvelopeForDecoder(value: unknown): Promise<string> {
 class MemoryBrewStorage {
   private entries: Brew[] = [];
   public failUpdate = false;
+  public failRemove = false;
 
   public add = jasmine
     .createSpy('add')
@@ -157,6 +159,9 @@ class MemoryBrewStorage {
   public removeByObject = jasmine
     .createSpy('removeByObject')
     .and.callFake((brew: Brew): Promise<boolean> => {
+      if (this.failRemove) {
+        return Promise.resolve(false);
+      }
       const index = this.entries.findIndex(
         (entry) => entry.config.uuid === brew.config.uuid,
       );
@@ -184,6 +189,7 @@ describe('BrewImportService', () => {
   let settingsStorage: jasmine.SpyObj<UISettingsStorage>;
   let brewStorage: MemoryBrewStorage;
   let fileHelper: jasmine.SpyObj<UIFileHelper>;
+  let uiLog: jasmine.SpyObj<UILog>;
   let settings: Settings;
 
   beforeEach(() => {
@@ -209,6 +215,7 @@ describe('BrewImportService', () => {
       'writeInternalFileFromText',
       'deleteInternalFile',
     ]);
+    uiLog = jasmine.createSpyObj('UILog', ['log', 'error']);
     fileHelper.writeInternalFileFromText.and.resolveTo();
     fileHelper.deleteInternalFile.and.resolveTo();
 
@@ -256,6 +263,7 @@ describe('BrewImportService', () => {
         { provide: UIPreparationStorage, useValue: preparationStorage },
         { provide: UIBrewStorage, useValue: brewStorage },
         { provide: UIFileHelper, useValue: fileHelper },
+        { provide: UILog, useValue: uiLog },
         { provide: UISettingsStorage, useValue: settingsStorage },
         { provide: TranslateService, useValue: translate },
       ],
@@ -792,7 +800,7 @@ describe('BrewImportService', () => {
     expect(loaded.customInformation.imported).toEqual(envelope().imported);
   });
 
-  it('rejects when the post-add update fails', async () => {
+  it('logs a clean rollback when the post-add update fails and removing the imported brew succeeds', async () => {
     brewStorage.failUpdate = true;
 
     await expectAsync(service.import(envelope())).toBeRejectedWithError(
@@ -803,6 +811,26 @@ describe('BrewImportService', () => {
       'brews/saved-brew_flow_profile.json',
     );
     expect(brewStorage.removeByObject.calls.count()).toBe(1);
+    expect(uiLog.error).toHaveBeenCalledWith(
+      'Import brew update failed; rolled back imported brew: saved-brew',
+    );
+  });
+
+  it('logs an unsafe rollback when the post-add update fails and removing the imported brew also fails', async () => {
+    brewStorage.failUpdate = true;
+    brewStorage.failRemove = true;
+
+    await expectAsync(service.import(envelope())).toBeRejectedWithError(
+      'Imported brew update failed: saved-brew',
+    );
+    expect(brewStorage.getEntryByUUID('saved-brew')).not.toBeNull();
+    expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
+      'brews/saved-brew_flow_profile.json',
+    );
+    expect(brewStorage.removeByObject.calls.count()).toBe(1);
+    expect(uiLog.error).toHaveBeenCalledWith(
+      'Import brew update failed; rollback could not remove imported brew: saved-brew',
+    );
   });
 
   it('keeps the original import failure when rollback flow-file deletion fails', async () => {
@@ -815,6 +843,10 @@ describe('BrewImportService', () => {
     expect(brewStorage.getEntryByUUID('saved-brew')).toBeNull();
     expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
       'brews/saved-brew_flow_profile.json',
+    );
+    expect(uiLog.error).toHaveBeenCalledWith(
+      'Import brew rollback flow-file delete failed: brews/saved-brew_flow_profile.json',
+      jasmine.any(Error),
     );
   });
 

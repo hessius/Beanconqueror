@@ -13,6 +13,7 @@ import type {
 import { UIBeanStorage } from '../uiBeanStorage';
 import { UIBrewStorage } from '../uiBrewStorage';
 import { UIFileHelper } from '../uiFileHelper';
+import { UILog } from '../uiLog';
 import { UIMillStorage } from '../uiMillStorage';
 import { UIPreparationStorage } from '../uiPreparationStorage';
 import { UISettingsStorage } from '../uiSettingsStorage';
@@ -44,6 +45,7 @@ export class BrewImportService {
   private readonly preparationStorage = inject(UIPreparationStorage);
   private readonly brewStorage = inject(UIBrewStorage);
   private readonly fileHelper = inject(UIFileHelper);
+  private readonly uiLog = inject(UILog);
   private readonly settingsStorage = inject(UISettingsStorage);
 
   public build(envelope: IHandoffEnvelope): IBrewImportResult {
@@ -151,9 +153,23 @@ export class BrewImportService {
       if (addedBrew.flow_profile) {
         try {
           await this.fileHelper.deleteInternalFile(addedBrew.flow_profile);
-        } catch {}
+        } catch (ex) {
+          this.uiLog.error(
+            `Import brew rollback flow-file delete failed: ${addedBrew.flow_profile}`,
+            ex,
+          );
+        }
       }
-      await this.brewStorage.removeByObject(addedBrew);
+      const didRollback = await this.brewStorage.removeByObject(addedBrew);
+      if (didRollback) {
+        this.uiLog.error(
+          `Import brew update failed; rolled back imported brew: ${addedBrew.config.uuid}`,
+        );
+      } else {
+        this.uiLog.error(
+          `Import brew update failed; rollback could not remove imported brew: ${addedBrew.config.uuid}`,
+        );
+      }
       throw new Error(`Imported brew update failed: ${addedBrew.config.uuid}`);
     }
 
