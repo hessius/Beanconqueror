@@ -405,14 +405,15 @@ before any decompression was attempted.
 
 ## Limits and failure modes
 
-Before anything is decoded, the route calls `canBrewIfNotShowMessage()`. An
-imported brew is linked to a bean, a preparation method and a grinder exactly
-like a hand-entered one, so a library missing any of the three cannot take one.
-That case shows Beanconqueror's existing "Something is missing here..."
-popover, which names the missing equipment, and the link is dropped without a
-decode. Beanconqueror seeds preparation methods on first run but never seeds a
-bean, so this is the expected outcome of the first handoff into a fresh
-install. Nothing is wrong with the link, and no sender change can avoid it.
+Before anything is decoded, the route calls `canImportBrewIfNotShowMessage()`.
+An import needs the two links the importer cannot create for itself: an active
+bean and an active preparation method. A library missing either cannot take a
+brew, so the link is dropped without a decode and Beanconqueror's existing
+"Something is missing here..." popover names what is missing. A grinder is not
+required: `brew.mill` is left empty when the hint is absent or unmatched.
+Beanconqueror seeds preparation methods on first run but never seeds a bean, so
+this is the expected outcome of the first handoff into a fresh install. Nothing
+is wrong with the link, and no sender change can avoid it.
 
 All decoder failures throw an `Error`. The route catches the error, logs
 `Import brew from handoff link failed: <message>`, hides the loading spinner,
