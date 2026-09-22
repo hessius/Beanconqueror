@@ -255,6 +255,13 @@ describe('GraphHelperService axis fitting', () => {
     expect(range).toEqual([-8.3, 1.5]);
   });
 
+  it('keeps a near-zero negative sample inside a range whose bound has crossed zero', () => {
+    const range = expandLiveAxisRangeForSample([-1.099, 0.089], -0.01, 1.5, 1);
+
+    expect(range[1]).toBeGreaterThanOrEqual(-0.01);
+    expect(range).toEqual([-1.099, 0.089]);
+  });
+
   it('keeps positive live custom expansion unchanged', () => {
     const range = expandLiveAxisRangeForSample([0, 20], 19.5, 1.5, 1);
 

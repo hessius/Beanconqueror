@@ -49,7 +49,9 @@ export function expandLiveAxisRangeForSample(
   }
 
   if (sample >= upperBound - tolerance) {
-    return [lowerBound, sample * multiplier];
+    // The bound has to end up above the sample it is following, which a bare
+    // multiplication does not guarantee for a sample near zero.
+    return [lowerBound, Math.max(upperBound, sample + headroom)];
   }
 
   return range;
