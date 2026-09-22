@@ -35,7 +35,10 @@ export function expandLiveAxisRangeForSample(
       nextLowerBound = sample - headroom;
     }
     if (sample >= upperBound - tolerance) {
-      nextUpperBound = Math.min(0, sample + headroom);
+      // A negative range grows towards zero, but a sample that has climbed
+      // back above zero needs a bound above it or the trace is clipped again.
+      nextUpperBound =
+        sample >= 0 ? sample + headroom : Math.min(0, sample + headroom);
     }
 
     if (nextLowerBound === lowerBound && nextUpperBound === upperBound) {

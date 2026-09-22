@@ -248,6 +248,13 @@ describe('GraphHelperService axis fitting', () => {
     expect(range).toEqual([-13.5, -4.7]);
   });
 
+  it('lifts the upper bound above zero when a negative live series climbs back', () => {
+    const range = expandLiveAxisRangeForSample([-8.3, -4.7], 1, 1.5, 1);
+
+    expect(range[1]).toBeGreaterThanOrEqual(1);
+    expect(range).toEqual([-8.3, 1.5]);
+  });
+
   it('keeps positive live custom expansion unchanged', () => {
     const range = expandLiveAxisRangeForSample([0, 20], 19.5, 1.5, 1);
 
