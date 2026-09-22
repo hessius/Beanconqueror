@@ -41,6 +41,10 @@ export abstract class StorageClass {
     return Math.floor(Date.now() / 1000);
   }
 
+  protected prepareEntryForStorage(_entry: any): any {
+    return _entry;
+  }
+
   // Dynamic import to avoid circular dependency:
   // StorageClass → UIAlert → ... → UISettingsStorage → extends StorageClass
   private async showAlert(message: string, title?: string): Promise<void> {
@@ -106,7 +110,9 @@ export abstract class StorageClass {
    */
   public async addAndConfirm(_entry): Promise<StorageClassAddResult> {
     const promise = new Promise<StorageClassAddResult>(async (resolve) => {
-      const newEntry = StorageClass.cloneData(_entry);
+      const newEntry = StorageClass.cloneData(
+        this.prepareEntryForStorage(_entry),
+      );
       let saved = false;
       try {
         newEntry.config.uuid = crypto.randomUUID();
@@ -130,19 +136,20 @@ export abstract class StorageClass {
   public async update(_obj): Promise<boolean> {
     const promise: Promise<any> = new Promise(async (resolve, reject) => {
       try {
+        const updatedObj = this.prepareEntryForStorage(_obj);
         let didUpdate: boolean = false;
         for (let i = 0; i < this.storedData.length; i++) {
-          if (this.storedData[i].config.uuid === _obj.config.uuid) {
+          if (this.storedData[i].config.uuid === updatedObj.config.uuid) {
             this.uiLog.log(
-              `Storage - Update  - Successfully - ${_obj.config.uuid}`,
+              `Storage - Update  - Successfully - ${updatedObj.config.uuid}`,
             );
-            this.storedData[i] = _obj;
+            this.storedData[i] = updatedObj;
             const saved = await this.__save();
             this.__sendEvent('UPDATE');
             didUpdate = true;
             if (saved === false) {
               this.uiLog.error(
-                `Storage - Update  - Unsucessfully - ${_obj.config.uuid} - save failed`,
+                `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - save failed`,
               );
             }
             resolve(saved);
@@ -151,10 +158,10 @@ export abstract class StorageClass {
         }
         if (didUpdate === false) {
           this.uiLog.error(
-            `Storage - Update  - Unsucessfully - ${_obj.config.uuid} - not found`,
+            `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - not found`,
           );
           await this.showAlert(
-            `Storage - Update  - Unsucessfully - ${_obj.config.uuid} - not found`,
+            `Storage - Update  - Unsucessfully - ${updatedObj.config.uuid} - not found`,
             'CRITICAL ERROR',
           );
         }

@@ -1,10 +1,19 @@
 import { TestBed } from '@angular/core/testing';
+import { TranslateService } from '@ngx-translate/core';
 
 import { StorageClass } from '../storageClass';
 import { UIAlert } from '../../services/uiAlert';
+import { UIBeanStorage } from '../../services/uiBeanStorage';
+import { UIBrewStorage } from '../../services/uiBrewStorage';
 import { UILog } from '../../services/uiLog';
 import { UIStorage } from '../../services/uiStorage';
-import { createMockUIAlert, createMockUILog } from '../../test-utils';
+import { Bean } from '../bean/bean';
+import { Brew } from '../brew/brew';
+import {
+  createMockUIAlert,
+  createMockUILog,
+  createMockTranslateService,
+} from '../../test-utils';
 
 class TestStorage extends StorageClass {
   public constructor() {
@@ -165,5 +174,97 @@ describe('StorageClass', () => {
       'Storage - Save Set - Unsuccessfully  - false',
       'CRITICAL ERROR',
     );
+  });
+});
+
+describe('typed storage normalization', () => {
+  let mockUIStorage: jasmine.SpyObj<UIStorage>;
+  let mockUILog: jasmine.SpyObj<any> & {
+    logs: string[];
+    errors: string[];
+    debugLogs: string[];
+  };
+
+  beforeEach(() => {
+    mockUIStorage = jasmine.createSpyObj<UIStorage>('UIStorage', [
+      'get',
+      'set',
+    ]);
+    mockUIStorage.set.and.returnValue(Promise.resolve(true));
+    mockUILog = createMockUILog();
+
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: UIStorage, useValue: mockUIStorage },
+        { provide: UILog, useValue: mockUILog },
+        { provide: TranslateService, useValue: createMockTranslateService() },
+      ],
+    });
+  });
+
+  it('normalizes bean numeric fields added through add or addAndConfirm', async () => {
+    const storage = TestBed.runInInjectionContext(() => new UIBeanStorage());
+    const addBean = new Bean();
+    addBean.weight = '250' as unknown as number;
+    addBean.cost = '12.5' as unknown as number;
+    const confirmBean = new Bean();
+    confirmBean.weight = '125' as unknown as number;
+    confirmBean.cost = '7.75' as unknown as number;
+
+    await storage.add(addBean);
+    await storage.addAndConfirm(confirmBean);
+
+    const entries = storage.getAllEntries();
+    expect(entries[0].weight).toBe(250);
+    expect(entries[0].cost).toBe(12.5);
+    expect(entries[1].weight).toBe(125);
+    expect(entries[1].cost).toBe(7.75);
+  });
+
+  it('normalizes bean numeric fields updated through update', async () => {
+    const storage = TestBed.runInInjectionContext(() => new UIBeanStorage());
+    const bean = new Bean();
+
+    const addedBean = await storage.add(bean);
+    addedBean.weight = '500' as unknown as number;
+    addedBean.cost = '21.25' as unknown as number;
+    await storage.update(addedBean);
+
+    const [entry] = storage.getAllEntries();
+    expect(entry.weight).toBe(500);
+    expect(entry.cost).toBe(21.25);
+  });
+
+  it('normalizes brew numeric fields added through add or addAndConfirm', async () => {
+    const storage = TestBed.runInInjectionContext(() => new UIBrewStorage());
+    const addBrew = new Brew();
+    addBrew.brew_quantity = '42' as unknown as number;
+    addBrew.grind_weight = '18.5' as unknown as number;
+    const confirmBrew = new Brew();
+    confirmBrew.brew_quantity = '36' as unknown as number;
+    confirmBrew.grind_weight = '16.25' as unknown as number;
+
+    await storage.add(addBrew);
+    await storage.addAndConfirm(confirmBrew);
+
+    const entries = storage.getAllEntries();
+    expect(entries[0].brew_quantity).toBe(42);
+    expect(entries[0].grind_weight).toBe(18.5);
+    expect(entries[1].brew_quantity).toBe(36);
+    expect(entries[1].grind_weight).toBe(16.25);
+  });
+
+  it('normalizes brew numeric fields updated through update', async () => {
+    const storage = TestBed.runInInjectionContext(() => new UIBrewStorage());
+    const brew = new Brew();
+
+    const addedBrew = await storage.add(brew);
+    addedBrew.brew_quantity = '45' as unknown as number;
+    addedBrew.grind_weight = '19.5' as unknown as number;
+    await storage.update(addedBrew);
+
+    const [entry] = storage.getAllEntries();
+    expect(entry.brew_quantity).toBe(45);
+    expect(entry.grind_weight).toBe(19.5);
   });
 });
