@@ -102,6 +102,14 @@ export function collectHandoffPayload(url: string): string {
     throw new Error(`Too many shareBrew chunks: maximum is ${MAX_CHUNKS}`);
   }
 
+  const seenIndexes = new Set<number>();
+  chunkIndexes.forEach((index) => {
+    if (seenIndexes.has(index)) {
+      throw new Error(`Duplicate shareBrew chunk ${index}`);
+    }
+    seenIndexes.add(index);
+  });
+
   const uniqueIndexes = [...new Set(chunkIndexes)].sort((a, b) => a - b);
   for (let index = 0; index < uniqueIndexes.length; index++) {
     if (uniqueIndexes[index] !== index) {

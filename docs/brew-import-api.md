@@ -36,7 +36,7 @@ The receiver reassembles like this:
 1. Read `len`. It must be decimal digits and fit in a safe JavaScript integer.
 2. Collect keys matching `shareBrew<integer>`.
 3. Require at least one chunk, at most 1,024 chunks, and a complete zero based
-   sequence with no missing index.
+   sequence with no duplicate or missing index.
 4. Require every `shareBrewN` value to be at most 400 characters, then
    concatenate `shareBrew0`, `shareBrew1`, and so on.
 5. Require the concatenated payload length to equal `len`.
@@ -427,6 +427,7 @@ and shows the generic `BREW_IMPORT_FAILED` alert.
 | No chunks                                                  | `Missing shareBrew chunks`                                                   | Send `shareBrew0`.                                                           |
 | More than 1,024 chunks                                     | `Too many shareBrew chunks: maximum is 1024`                                 | Stay within the sender URL budget.                                           |
 | Single chunk exceeds 400 characters                        | `shareBrew<n> must be at most 400 characters`                                | Split the payload into 400 character chunks.                                 |
+| Duplicate chunk index                                      | `Duplicate shareBrew chunk <n>`                                              | Send each chunk index only once.                                             |
 | Missing chunk index                                        | `Missing shareBrew chunk <n>`                                                | Send every chunk from `0` through the last index.                            |
 | Assembled payload shorter than `len`                       | `Truncated brew handoff payload: expected <x> characters, got <y>`           | Check OS URL truncation and chunk assembly.                                  |
 | Assembled payload longer or shorter in the other direction | `Brew handoff payload length mismatch: expected <x> characters, got <y>`     | Make `len` match the base64url payload exactly.                              |

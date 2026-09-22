@@ -143,6 +143,28 @@ describe('brew handoff decoder', () => {
     ).toThrowError('Missing shareBrew chunk 1');
   });
 
+  it('rejects a repeated chunk index', () => {
+    expect(() =>
+      collectHandoffPayload(
+        'beanconqueror://ADD_BREW?len=1&shareBrew0=a&shareBrew0=b',
+      ),
+    ).toThrowError('Duplicate shareBrew chunk 0');
+  });
+
+  it('rejects chunk indexes that collide after normalisation', () => {
+    expect(() =>
+      collectHandoffPayload(
+        'beanconqueror://ADD_BREW?len=1&shareBrew0=a&shareBrew00=b',
+      ),
+    ).toThrowError('Duplicate shareBrew chunk 0');
+  });
+
+  it('accepts a well-formed multi-chunk handoff payload', () => {
+    const payload = `${'a'.repeat(400)}${'b'.repeat(250)}`;
+
+    expect(collectHandoffPayload(handoffUrl(payload))).toBe(payload);
+  });
+
   it('rejects too many chunks before assembly', () => {
     expect(() =>
       collectHandoffPayload(handoffUrl('', { chunks: 1025 })),
