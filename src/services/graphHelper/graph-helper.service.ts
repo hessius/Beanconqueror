@@ -14,6 +14,44 @@ import { CoffeeBluetoothDevicesService } from '../coffeeBluetoothDevices/coffee-
 import { ThemeService } from '../theme/theme.service';
 import { UISettingsStorage } from '../uiSettingsStorage';
 
+export function expandLiveAxisRangeForSample(
+  range: [number, number],
+  sample: number,
+  multiplier: number,
+  tolerance: number,
+): [number, number] {
+  if (!Number.isFinite(sample)) {
+    return range;
+  }
+
+  const [lowerBound, upperBound] = range;
+  const headroom = Math.abs(sample) * (multiplier - 1);
+
+  if (upperBound < 0) {
+    let nextLowerBound = lowerBound;
+    let nextUpperBound = upperBound;
+
+    if (sample <= lowerBound + tolerance) {
+      nextLowerBound = sample - headroom;
+    }
+    if (sample >= upperBound - tolerance) {
+      nextUpperBound = Math.min(0, sample + headroom);
+    }
+
+    if (nextLowerBound === lowerBound && nextUpperBound === upperBound) {
+      return range;
+    }
+
+    return [nextLowerBound, nextUpperBound];
+  }
+
+  if (sample >= upperBound - tolerance) {
+    return [lowerBound, sample * multiplier];
+  }
+
+  return range;
+}
+
 @Injectable({
   providedIn: 'root',
 })

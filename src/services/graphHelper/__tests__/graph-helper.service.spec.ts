@@ -9,7 +9,10 @@ import { PREPARATION_STYLE_TYPE } from '../../../enums/preparations/preparationS
 import { CoffeeBluetoothDevicesService } from '../../coffeeBluetoothDevices/coffee-bluetooth-devices.service';
 import { ThemeService } from '../../theme/theme.service';
 import { UISettingsStorage } from '../../uiSettingsStorage';
-import { GraphHelperService } from '../graph-helper.service';
+import {
+  expandLiveAxisRangeForSample,
+  GraphHelperService,
+} from '../graph-helper.service';
 
 describe('GraphHelperService axis fitting', () => {
   let service: GraphHelperService;
@@ -227,6 +230,28 @@ describe('GraphHelperService axis fitting', () => {
     expect(liveLayout['yaxis11'].range[0]).toBeLessThan(
       liveLayout['yaxis11'].range[1],
     );
+  });
+
+  it('keeps the latest all-negative live custom sample inside the expanded axis', () => {
+    const range = expandLiveAxisRangeForSample([-8.3, -4.7], -5, 1.5, 1);
+
+    expect(range[0]).toBeLessThanOrEqual(-5);
+    expect(range[1]).toBeGreaterThanOrEqual(-5);
+    expect(range).toEqual([-8.3, -2.5]);
+  });
+
+  it('widens the lower bound when an all-negative live custom sample moves lower', () => {
+    const range = expandLiveAxisRangeForSample([-8.3, -4.7], -9, 1.5, 1);
+
+    expect(range[0]).toBeLessThanOrEqual(-9);
+    expect(range[1]).toBe(-4.7);
+    expect(range).toEqual([-13.5, -4.7]);
+  });
+
+  it('keeps positive live custom expansion unchanged', () => {
+    const range = expandLiveAxisRangeForSample([0, 20], 19.5, 1.5, 1);
+
+    expect(range).toEqual([0, 29.25]);
   });
 
   it('keeps the detail chart fitted for an all-negative custom series', () => {
