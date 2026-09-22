@@ -189,6 +189,10 @@ describe('IntentHandlerService', () => {
 
     await service.handleDeepLink(url);
 
+    expect(uiLog.log).toHaveBeenCalledWith(
+      `Handle deeplink: ADD_BREW (${url.length} chars)`,
+    );
+    expect(uiLog.log).not.toHaveBeenCalledWith('Handle deeplink: ' + url);
     expect(brewImportService.import).toHaveBeenCalledOnceWith(envelope);
     expect(uiAlert.showMessage).toHaveBeenCalledWith(
       'BREW_IMPORT_SUCCESSFUL',

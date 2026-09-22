@@ -207,8 +207,10 @@ describe('BrewImportService', () => {
     brewStorage = new MemoryBrewStorage();
     fileHelper = jasmine.createSpyObj('UIFileHelper', [
       'writeInternalFileFromText',
+      'deleteInternalFile',
     ]);
     fileHelper.writeInternalFileFromText.and.resolveTo();
+    fileHelper.deleteInternalFile.and.resolveTo();
 
     const beans = [entry(new Bean(), 'Any coffee', 'bean-1')];
     const mills = [entry(new Mill(), 'Any grinder', 'mill-1')];
@@ -324,6 +326,20 @@ describe('BrewImportService', () => {
     expect(result.brew.coffee_blooming_time_milliseconds).toBe(750);
     expect(result.brew.coffee_first_drip_time).toBe(12);
     expect(result.brew.coffee_first_drip_time_milliseconds).toBe(125);
+  });
+
+  it('carries rounded millisecond overflow into the seconds field', () => {
+    const result = service.build(
+      envelope({
+        brew: {
+          ...envelope().brew,
+          brewTime: 0.9995,
+        },
+      }),
+    );
+
+    expect(result.brew.brew_time).toBe(1);
+    expect(result.brew.brew_time_milliseconds).toBe(0);
   });
 
   it('reconstructs flow samples from deltas and converts decigrams to grams', () => {
@@ -745,7 +761,23 @@ describe('BrewImportService', () => {
       'Imported brew update failed: saved-brew',
     );
     expect(brewStorage.getEntryByUUID('saved-brew')).toBeNull();
+    expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
+      'brews/saved-brew_flow_profile.json',
+    );
     expect(brewStorage.removeByObject.calls.count()).toBe(1);
+  });
+
+  it('keeps the original import failure when rollback flow-file deletion fails', async () => {
+    brewStorage.failUpdate = true;
+    fileHelper.deleteInternalFile.and.rejectWith(new Error('delete failed'));
+
+    await expectAsync(service.import(envelope())).toBeRejectedWithError(
+      'Imported brew update failed: saved-brew',
+    );
+    expect(brewStorage.getEntryByUUID('saved-brew')).toBeNull();
+    expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
+      'brews/saved-brew_flow_profile.json',
+    );
   });
 
   it('rejects without persisting when no bean or preparation fallback exists', async () => {

@@ -4,19 +4,26 @@ import {
   decodeHandoffPayload,
 } from '../brew-handoff.decoder';
 
-async function gzipBytes(bytes: Uint8Array): Promise<string> {
+async function gzipRawBytes(bytes: Uint8Array): Promise<Uint8Array> {
   const stream = new Blob([bytes as BlobPart])
     .stream()
     .pipeThrough(new CompressionStream('gzip'));
-  const gzipped = new Uint8Array(await new Response(stream).arrayBuffer());
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function base64Url(bytes: Uint8Array): string {
   let binary = '';
-  gzipped.forEach((byte) => {
+  bytes.forEach((byte) => {
     binary += String.fromCharCode(byte);
   });
   return btoa(binary)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '');
+}
+
+async function gzipBytes(bytes: Uint8Array): Promise<string> {
+  return base64Url(await gzipRawBytes(bytes));
 }
 
 async function gzipString(value: string): Promise<string> {
@@ -142,23 +149,34 @@ describe('brew handoff decoder', () => {
     ).toThrowError('Too many shareBrew chunks: maximum is 1024');
   });
 
+  it('accepts the sender URL budget while keeping the receiver backstop finite', () => {
+    const payload = 'a'.repeat(328 * 400);
+
+    expect(collectHandoffPayload(handoffUrl(payload))).toBe(payload);
+    expect(() =>
+      collectHandoffPayload(handoffUrl('', { chunks: 1025 })),
+    ).toThrowError('Too many shareBrew chunks: maximum is 1024');
+  });
+
   it('rejects oversized compressed payloads before and during assembly', () => {
     expect(() =>
       collectHandoffPayload(
-        `beanconqueror://ADD_BREW?len=409601&shareBrew0=${'a'.repeat(
-          409601,
-        )}`,
+        `beanconqueror://ADD_BREW?len=409601&shareBrew0=${'a'.repeat(409601)}`,
       ),
     ).toThrowError('Brew handoff len must be at most 409600 characters');
     expect(() =>
       collectHandoffPayload(
-        `beanconqueror://ADD_BREW?len=409600&shareBrew0=${'a'.repeat(
-          409601,
-        )}`,
+        `beanconqueror://ADD_BREW?len=409600&shareBrew0=${'a'.repeat(409601)}`,
       ),
-    ).toThrowError(
-      'Brew handoff payload must be at most 409600 characters',
-    );
+    ).toThrowError('shareBrew0 must be at most 400 characters');
+  });
+
+  it('rejects a single chunk beyond the per-chunk budget', () => {
+    expect(() =>
+      collectHandoffPayload(
+        `beanconqueror://ADD_BREW?len=401&shareBrew0=${'a'.repeat(401)}`,
+      ),
+    ).toThrowError('shareBrew0 must be at most 400 characters');
   });
 
   it('rejects assembled payload length mismatches', () => {
@@ -191,21 +209,40 @@ describe('brew handoff decoder', () => {
     );
   });
 
-  it('rejects gzip when native decompression is unavailable', async () => {
+  it('falls back to zip.js gzip inflation when native decompression is unavailable', async () => {
     (
       window as unknown as { DecompressionStream?: typeof DecompressionStream }
     ).DecompressionStream = undefined;
 
+    const decoded = await decodeHandoffPayload(
+      await gzipBase64Url(validEnvelope()),
+    );
+
+    expect(decoded).toEqual(validEnvelope());
+  });
+
+  it('bounds zip.js fallback inflation when the gzip footer lies about size', async () => {
+    (
+      window as unknown as { DecompressionStream?: typeof DecompressionStream }
+    ).DecompressionStream = undefined;
+    const gzipped = await gzipRawBytes(
+      new TextEncoder().encode(JSON.stringify({ note: 'x'.repeat(600000) })),
+    );
+    gzipped[gzipped.length - 4] = 1;
+    gzipped[gzipped.length - 3] = 0;
+    gzipped[gzipped.length - 2] = 0;
+    gzipped[gzipped.length - 1] = 0;
+
     await expectAsync(
-      decodeHandoffPayload(await gzipBase64Url(validEnvelope())),
-    ).toBeRejectedWithError('Gzip decompression is unavailable on this device');
+      decodeHandoffPayload(base64Url(gzipped)),
+    ).toBeRejectedWithError('Inflated payload exceeds 524288 bytes');
   });
 
   it('rejects gzip that inflates past the cap', async () => {
-    const payload = await gzipBase64Url({ note: 'x'.repeat(300000) });
+    const payload = await gzipBase64Url({ note: 'x'.repeat(600000) });
 
     await expectAsync(decodeHandoffPayload(payload)).toBeRejectedWithError(
-      'Inflated payload exceeds 262144 bytes',
+      'Inflated payload exceeds 524288 bytes',
     );
   });
 
@@ -736,6 +773,19 @@ describe('brew handoff decoder', () => {
         }),
       ),
     ).toBeRejectedWithError('Envelope metrics[0].key is not allowed');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          metrics: [
+            validEnvelope().metrics[0],
+            {
+              ...validEnvelope().metrics[0],
+              name: 'Same key again',
+            },
+          ],
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope metrics[1].key is duplicated');
   });
 
   it('decodes a valid envelope and round trips through real gzip', async () => {

@@ -46,7 +46,14 @@ export class IntentHandlerService {
   public attachOnHandleOpenUrl() {
     App.addListener('appUrlOpen', (event: URLOpenListenerEvent) => {
       this.zone.run(() => {
-        this.uiLog.log('Deeplink matched', event);
+        if (this.isBrewHandoffIntent(event.url)) {
+          this.uiLog.log('Deeplink matched', {
+            intent: IntentHandlerService.SUPPORTED_INTENTS.ADD_BREW,
+            length: event.url.length,
+          });
+        } else {
+          this.uiLog.log('Deeplink matched', event);
+        }
         this.handleDeepLink(event.url);
       });
     });
@@ -55,7 +62,13 @@ export class IntentHandlerService {
   public async handleQRCodeLink(_url) {
     await this.uiHelper.isBeanconqurorAppReady().then(async () => {
       const url: string = _url;
-      this.uiLog.log('Handle QR Code Link: ' + url);
+      if (this.isBrewHandoffIntent(url)) {
+        this.uiLog.log(
+          `Handle QR Code Link: ${IntentHandlerService.SUPPORTED_INTENTS.ADD_BREW} (${url.length} chars)`,
+        );
+      } else {
+        this.uiLog.log('Handle QR Code Link: ' + url);
+      }
       await this.handleDeepLink(_url);
     });
   }
@@ -65,7 +78,13 @@ export class IntentHandlerService {
       if (_url) {
         await this.uiHelper.isBeanconqurorAppReady().then(async () => {
           const url: string = _url;
-          this.uiLog.log('Handle deeplink: ' + url);
+          if (this.isBrewHandoffIntent(url)) {
+            this.uiLog.log(
+              `Handle deeplink: ${IntentHandlerService.SUPPORTED_INTENTS.ADD_BREW} (${url.length} chars)`,
+            );
+          } else {
+            this.uiLog.log('Handle deeplink: ' + url);
+          }
           const urlParams = new URLSearchParams(url.split('?')[1]);
           if (
             url.indexOf('https://beanconqueror.com/?qr=') === 0 ||
@@ -122,11 +141,7 @@ export class IntentHandlerService {
               userBeanJSON = userBeanJSON.replace(/ /g, '+');
               await this.addBeanFromUser(userBeanJSON);
             }
-          } else if (
-            url
-              .toLowerCase()
-              .indexOf('beanconqueror://ADD_BREW'.toLowerCase()) === 0
-          ) {
+          } else if (this.isBrewHandoffIntent(url)) {
             await this.addBrewFromHandoff(url);
           } else if (
             url
@@ -265,6 +280,12 @@ export class IntentHandlerService {
         true,
       );
     }
+  }
+
+  private isBrewHandoffIntent(url: string): boolean {
+    return (
+      url.toLowerCase().indexOf('beanconqueror://ADD_BREW'.toLowerCase()) === 0
+    );
   }
 
   private importVisualizerShot(_shareCode) {

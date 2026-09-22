@@ -148,6 +148,11 @@ export class BrewImportService {
 
     const didUpdate = await this.brewStorage.update(addedBrew);
     if (!didUpdate) {
+      if (addedBrew.flow_profile) {
+        try {
+          await this.fileHelper.deleteInternalFile(addedBrew.flow_profile);
+        } catch {}
+      }
       await this.brewStorage.removeByObject(addedBrew);
       throw new Error(`Imported brew update failed: ${addedBrew.config.uuid}`);
     }
@@ -425,9 +430,8 @@ export class BrewImportService {
     value: number,
     assign: (seconds: number, milliseconds: number) => void,
   ): void {
-    const seconds = Math.trunc(value);
-    const milliseconds = Math.round((value - seconds) * 1000);
-    assign(seconds, milliseconds);
+    const totalMilliseconds = Math.round(value * 1000);
+    assign(Math.trunc(totalMilliseconds / 1000), totalMilliseconds % 1000);
   }
 
   private formatTimestamp(milliseconds: number): string {
