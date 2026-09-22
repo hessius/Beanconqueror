@@ -16,7 +16,10 @@ import { UILog } from '../../uiLog';
 import { UIMillStorage } from '../../uiMillStorage';
 import { UIPreparationStorage } from '../../uiPreparationStorage';
 import { UISettingsStorage } from '../../uiSettingsStorage';
-import { BrewImportService } from '../brew-import.service';
+import {
+  BrewImportRollbackError,
+  BrewImportService,
+} from '../brew-import.service';
 
 function envelope(overrides: Partial<IHandoffEnvelope> = {}): IHandoffEnvelope {
   return {
@@ -800,12 +803,22 @@ describe('BrewImportService', () => {
     expect(loaded.customInformation.imported).toEqual(envelope().imported);
   });
 
-  it('logs a clean rollback when the post-add update fails and removing the imported brew succeeds', async () => {
+  it('rejects with a clean rollback outcome when the post-add update fails and removing the imported brew succeeds', async () => {
     brewStorage.failUpdate = true;
 
-    await expectAsync(service.import(envelope())).toBeRejectedWithError(
-      'Imported brew update failed: saved-brew',
-    );
+    let rejection: unknown;
+    try {
+      await service.import(envelope());
+      fail('Expected import to reject');
+    } catch (ex) {
+      rejection = ex;
+    }
+
+    expect(rejection).toEqual(jasmine.any(BrewImportRollbackError));
+    const error = rejection as BrewImportRollbackError;
+    expect(error.message).toBe('Imported brew update failed: saved-brew');
+    expect(error.brewUuid).toBe('saved-brew');
+    expect(error.rolledBack).toBeTrue();
     expect(brewStorage.getEntryByUUID('saved-brew')).toBeNull();
     expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
       'brews/saved-brew_flow_profile.json',
@@ -816,13 +829,23 @@ describe('BrewImportService', () => {
     );
   });
 
-  it('logs an unsafe rollback when the post-add update fails and removing the imported brew also fails', async () => {
+  it('rejects with an unsafe rollback outcome when the post-add update fails and removing the imported brew also fails', async () => {
     brewStorage.failUpdate = true;
     brewStorage.failRemove = true;
 
-    await expectAsync(service.import(envelope())).toBeRejectedWithError(
-      'Imported brew update failed: saved-brew',
-    );
+    let rejection: unknown;
+    try {
+      await service.import(envelope());
+      fail('Expected import to reject');
+    } catch (ex) {
+      rejection = ex;
+    }
+
+    expect(rejection).toEqual(jasmine.any(BrewImportRollbackError));
+    const error = rejection as BrewImportRollbackError;
+    expect(error.message).toBe('Imported brew update failed: saved-brew');
+    expect(error.brewUuid).toBe('saved-brew');
+    expect(error.rolledBack).toBeFalse();
     expect(brewStorage.getEntryByUUID('saved-brew')).not.toBeNull();
     expect(fileHelper.deleteInternalFile).toHaveBeenCalledOnceWith(
       'brews/saved-brew_flow_profile.json',

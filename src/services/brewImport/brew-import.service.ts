@@ -25,6 +25,19 @@ export interface IBrewImportResult {
   brewFlow: BrewFlow;
 }
 
+export class BrewImportRollbackError extends Error {
+  public readonly isBrewImportRollbackError = true;
+
+  public constructor(
+    public readonly brewUuid: string,
+    public readonly rolledBack: boolean,
+  ) {
+    super(`Imported brew update failed: ${brewUuid}`);
+    this.name = 'BrewImportRollbackError';
+    Object.setPrototypeOf(this, BrewImportRollbackError.prototype);
+  }
+}
+
 interface INameMatchResult {
   uuid: string;
   note?: string;
@@ -170,7 +183,10 @@ export class BrewImportService {
           `Import brew update failed; rollback could not remove imported brew: ${addedBrew.config.uuid}`,
         );
       }
-      throw new Error(`Imported brew update failed: ${addedBrew.config.uuid}`);
+      throw new BrewImportRollbackError(
+        addedBrew.config.uuid,
+        didRollback,
+      );
     }
 
     return {
