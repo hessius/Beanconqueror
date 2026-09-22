@@ -45,6 +45,50 @@ describe('GraphHelperService axis fitting', () => {
     expect(layout['yaxis6'].range).toEqual([0, 100]);
   });
 
+  it('lets a higher reference water trace grow the water axis', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.waterDispensedTrace.y = [0, 40, 80];
+    traceReferences.waterDispensedTrace.y = [0, 120, 180];
+
+    const layout = layoutFor(service, traces, true, traceReferences);
+
+    expect(layout['yaxis6'].range[1]).toBeGreaterThanOrEqual(180);
+  });
+
+  it('does not let a lower reference water trace shrink the water axis', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.waterDispensedTrace.y = [0, 160, 260];
+    traceReferences.waterDispensedTrace.y = [0, 40, 80];
+
+    const layout = layoutFor(service, traces, true, traceReferences);
+    const activeOnlyLayout = layoutFor(service, traces, true);
+
+    expect(layout['yaxis6'].range).toEqual(activeOnlyLayout['yaxis6'].range);
+  });
+
+  it('keeps the default water axis when active and reference traces both fit', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.waterDispensedTrace.y = [0, 40, 60];
+    traceReferences.waterDispensedTrace.y = [0, 70, 90];
+
+    const layout = layoutFor(service, traces, true, traceReferences);
+
+    expect(layout['yaxis6'].range).toEqual([0, 100]);
+  });
+
+  it('keeps the existing water axis behavior without reference traces', () => {
+    const traces = filledTraces(service);
+    traces.waterDispensedTrace.y = [0, 120, 260];
+
+    const layout = layoutFor(service, traces, true, undefined);
+    const activeOnlyLayout = layoutFor(service, traces, true);
+
+    expect(layout['yaxis6'].range).toEqual(activeOnlyLayout['yaxis6'].range);
+  });
+
   it('fits a custom axis around its own values rather than around zero', () => {
     const traces = filledTraces(service);
     traces.customTraces = {
@@ -57,6 +101,89 @@ describe('GraphHelperService axis fitting', () => {
     expect(range[0]).toBeGreaterThan(80);
     expect(range[0]).toBeLessThan(88);
     expect(range[1]).toBeGreaterThan(93);
+  });
+
+  it('pins live custom axes to zero while detail keeps the fitted lower bound', () => {
+    const traces = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([88, 93, 90]),
+    };
+
+    const liveLayout = layoutFor(service, traces, false);
+    const detailLayout = layoutFor(service, traces, true);
+
+    expect(liveLayout['yaxis11'].range[0]).toBe(0);
+    expect(liveLayout['yaxis11'].range[1]).toBe(
+      detailLayout['yaxis11'].range[1],
+    );
+    expect(detailLayout['yaxis11'].range[0]).toBeGreaterThan(80);
+    expect(detailLayout['yaxis11'].range[0]).toBeLessThan(88);
+  });
+
+  it('fits a custom axis around reference values on the same axis', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([88, 93, 90]),
+    };
+    traceReferences.customTraces = {
+      targetTemperature: customTrace([96, 99, 97]),
+    };
+
+    const layout = layoutFor(service, traces, true, traceReferences);
+    const range = layout['yaxis11'].range;
+
+    expect(range[0]).toBeLessThan(88);
+    expect(range[1]).toBeGreaterThan(99);
+  });
+
+  it('fits a custom axis around reference values from the same key on a different axis', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([88, 93, 90], 'y11'),
+    };
+    traceReferences.customTraces = {
+      targetTemperature: customTrace([96, 99, 97], 'y12'),
+    };
+
+    const layout = layoutFor(service, traces, true, traceReferences);
+    const range = layout['yaxis11'].range;
+
+    expect(range[0]).toBeLessThan(88);
+    expect(range[1]).toBeGreaterThan(99);
+  });
+
+  it('normalizes a shared reference custom trace onto the active trace axis', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([88, 93, 90], 'y11'),
+    };
+    traceReferences.customTraces = {
+      targetTemperature: customTrace([96, 99, 97], 'y12'),
+    };
+
+    layoutFor(service, traces, true, traceReferences);
+
+    expect(traceReferences.customTraces.targetTemperature.yaxis).toBe('y11');
+  });
+
+  it('leaves the active custom axis unchanged when the reference has no matching key', () => {
+    const traces = filledTraces(service);
+    const traceReferences = filledTraces(service);
+    traces.customTraces = {
+      targetTemperature: customTrace([88, 93, 90]),
+    };
+    traceReferences.customTraces = {
+      pressureTarget: customTrace([120, 140, 130], 'y12'),
+    };
+
+    const layout = layoutFor(service, traces, true, traceReferences);
+    const activeOnlyLayout = layoutFor(service, traces, true);
+
+    expect(layout['yaxis11'].range).toEqual(activeOnlyLayout['yaxis11'].range);
+    expect(traceReferences.customTraces.pressureTarget.yaxis).toBe('y12');
   });
 
   it('gives a flat custom series a visible band instead of a zero-height axis', () => {
@@ -127,11 +254,11 @@ function filledTraces(service: GraphHelperService) {
   return service.fillTraces(traces, graphSettings(), true);
 }
 
-function customTrace(values: number[]) {
+function customTrace(values: number[], yaxis: string = 'y11') {
   return {
     x: values.map((_value, index) => index),
     y: values,
-    yaxis: 'y11',
+    yaxis,
     line: { color: '#000000' },
     visible: true,
   };
@@ -141,6 +268,7 @@ function layoutFor(
   service: GraphHelperService,
   traces: any,
   isDetail: boolean,
+  traceReferences?: any,
 ) {
   return service.getChartLayout(
     traces,
@@ -151,6 +279,7 @@ function layoutFor(
     300,
     150,
     true,
+    traceReferences,
   );
 }
 

@@ -463,8 +463,16 @@ export class GraphHelperService {
    * slightly lower than it has always drawn, which is a visible change to an
    * ordinary single-cup brew for no gain. The headroom exists to keep a trace
    * off the ceiling once it has outgrown the axis, not before.
+   *
+   * Detail and brewing charts can draw a reference series on the same water
+   * axis as the active brew. The axis has to fit both traces, because clipping
+   * the reference would make a larger saved brew look smaller than the live one
+   * it is being compared against.
    */
-  private fittedUpperBound(values: number[], fallback: number): number {
+  private fittedUpperBound(
+    values: number[] | undefined,
+    fallback: number,
+  ): number {
     const finite = (values ?? []).filter((value) => Number.isFinite(value));
     if (finite.length === 0) {
       return fallback;
@@ -488,7 +496,7 @@ export class GraphHelperService {
    * either side, and falls back to a fixed range only when it has none.
    */
   private fittedCustomRange(
-    values: number[],
+    values: number[] | undefined,
     fallback: [number, number],
   ): [number, number] {
     const finite = (values ?? []).filter((value) => Number.isFinite(value));
@@ -506,6 +514,10 @@ export class GraphHelperService {
     return [lowest - padding, highest + padding];
   }
 
+  private combinedTraceValues(...traces: any[]): number[] {
+    return traces.flatMap((trace) => (Array.isArray(trace?.y) ? trace.y : []));
+  }
+
   public getChartLayout(
     _traces: any,
     _preparationStyle: PREPARATION_STYLE_TYPE,
@@ -515,6 +527,7 @@ export class GraphHelperService {
     _chartWidth: number = undefined,
     _chartHeight: number = undefined,
     _disableClick: boolean = false,
+    _traceReferences: any = undefined,
   ) {
     const settings: Settings = this.uiSettingsStorage.getSettings();
     const isDarkMode = this.themeService.isDarkMode();
@@ -540,6 +553,10 @@ export class GraphHelperService {
     } catch (ex) {}
 
     const tickFormat = '%M:%S';
+    const waterDispensedValues = this.combinedTraceValues(
+      _traces.waterDispensedTrace,
+      _traceReferences?.waterDispensedTrace,
+    );
 
     let layout: any;
     if (_isDetail === false) {
@@ -733,10 +750,7 @@ export class GraphHelperService {
           position: 1,
           fixedrange: true,
           visible: false,
-          range: [
-            0,
-            this.fittedUpperBound(_traces.waterDispensedTrace?.y, 100),
-          ],
+          range: [0, this.fittedUpperBound(waterDispensedValues, 100)],
         };
       }
     } else {
@@ -833,7 +847,7 @@ export class GraphHelperService {
         showgrid: false,
         position: 1,
         fixedrange: false,
-        range: [0, this.fittedUpperBound(_traces.waterDispensedTrace?.y, 100)],
+        range: [0, this.fittedUpperBound(waterDispensedValues, 100)],
         visible: true,
       };
 
@@ -903,6 +917,16 @@ export class GraphHelperService {
         any,
       ][]) {
         let yAxisKey = trace.yaxis.replace('y', 'yaxis');
+        const referenceTrace = _traceReferences?.customTraces?.[key];
+        if (referenceTrace) {
+          // The reference trace object belongs to the chart component and can
+          // be reused across relayouts, but assigning the active axis for the
+          // same metric key is idempotent and keeps both plotted series on the
+          // axis whose range is fitted below.
+          referenceTrace.yaxis = trace.yaxis;
+        }
+        const fittedValues = this.combinedTraceValues(trace, referenceTrace);
+        const fittedRange = this.fittedCustomRange(fittedValues, [0, 20]);
         layout[yAxisKey] = {
           title: '',
           titlefont: { color: trace.line.color },
@@ -914,7 +938,7 @@ export class GraphHelperService {
           position: axisPositionOffset,
           fixedrange: !_isDetail,
           visible: _isDetail ? true : trace.visible,
-          range: this.fittedCustomRange(trace.y, [0, 20]),
+          range: _isDetail ? fittedRange : [0, fittedRange[1]],
         };
         if (!_isDetail) {
           layout[yAxisKey].visible =

@@ -964,6 +964,8 @@ export class BrewBrewingGraphComponent implements OnInit, OnDestroy {
       this.isDetail,
       chartWidth,
       chartHeight,
+      false,
+      this.traceReferences,
     );
 
     return layout;
