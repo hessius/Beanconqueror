@@ -472,6 +472,55 @@ describe('brew handoff decoder', () => {
         }),
       ),
     ).toBeRejectedWithError('Envelope brew.date must be ISO 8601');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: { ...validEnvelope().brew, date: '2026-02-30T12:00:00Z' },
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.date must be ISO 8601');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: { ...validEnvelope().brew, date: '2025-02-29T12:00:00Z' },
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.date must be ISO 8601');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: { ...validEnvelope().brew, date: '2026-00-01T12:00:00Z' },
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.date must be ISO 8601');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: { ...validEnvelope().brew, date: '2026-13-01T12:00:00Z' },
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.date must be ISO 8601');
+    await expectAsync(
+      decodeEnvelope(
+        validEnvelope({
+          brew: { ...validEnvelope().brew, date: '2026-01-00T12:00:00Z' },
+        }),
+      ),
+    ).toBeRejectedWithError('Envelope brew.date must be ISO 8601');
+
+    const leapDay = await decodeEnvelope(
+      validEnvelope({
+        brew: { ...validEnvelope().brew, date: '2024-02-29T12:00:00Z' },
+      }),
+    );
+    const validDate = await decodeEnvelope(
+      validEnvelope({
+        brew: { ...validEnvelope().brew, date: '2026-02-28T12:00:00Z' },
+      }),
+    );
+
+    expect(leapDay.brew.date).toBe('2024-02-29T12:00:00Z');
+    expect(validDate.brew.date).toBe('2026-02-28T12:00:00Z');
   });
 
   it('validates quantity units and resource-bounded brew fields', async () => {

@@ -63,6 +63,8 @@ const FORBIDDEN_RECORD_KEYS = new Set([
 ]);
 const ISO_DATE =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
+const ISO_DATE_PARTS =
+  /^(\d{4})-(\d{2})-(\d{2})T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /** Concatenate the numbered params back into one base64url string. */
 export function collectHandoffPayload(url: string): string {
@@ -806,10 +808,48 @@ function boundedString(
 
 function isoDateString(value: unknown, path: string): string {
   const date = boundedString(value, path, 1, MAX_LABEL_LENGTH);
-  if (!ISO_DATE.test(date) || !Number.isFinite(Date.parse(date))) {
+  const match = ISO_DATE_PARTS.exec(date);
+  if (
+    !ISO_DATE.test(date) ||
+    match === null ||
+    !isValidCalendarDate(match[1], match[2], match[3]) ||
+    !Number.isFinite(Date.parse(date))
+  ) {
     throw new Error(`${path} must be ISO 8601`);
   }
   return date;
+}
+
+function isValidCalendarDate(
+  yearText: string,
+  monthText: string,
+  dayText: string,
+): boolean {
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+  const daysInMonth = [
+    31,
+    isLeapYear(year) ? 29 : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+  return day <= daysInMonth[month - 1];
+}
+
+function isLeapYear(year: number): boolean {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
 }
 
 function boundedInteger(
