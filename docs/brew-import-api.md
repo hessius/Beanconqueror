@@ -68,7 +68,7 @@ validator constructs a new object containing only the recognised fields.
 | `v`        | number      | yes      |      | Must be exactly `1`.                                                                                                                      |
 | `app`      | object      | yes      |      | Must validate as the app block.                                                                                                           |
 | `brew`     | object      | yes      |      | Must validate as the brew block.                                                                                                          |
-| `bean`     | opaque JSON | no       |      | Sanitised as opaque JSON. The interface type is `Record<string, unknown>`, but the current validator accepts any bounded JSON value here. |
+| `bean`     | object      | no       |      | Must be an object when present. Sanitised as opaque JSON inside that object.                                                               |
 | `flow`     | object      | no       |      | Must validate as the flow block.                                                                                                          |
 | `metrics`  | array       | no       |      | At most 100 metric blocks.                                                                                                                |
 | `imported` | object      | yes      |      | Must validate as the provenance block.                                                                                                    |
@@ -87,7 +87,7 @@ provenance.
 
 | Field               | Type     | Required | Unit               | Decoder rule                                                                        |
 | ------------------- | -------- | -------- | ------------------ | ----------------------------------------------------------------------------------- |
-| `date`              | string   | yes      | ISO 8601 timestamp | Must match the decoder's ISO 8601 pattern and parse to a finite date.               |
+| `date`              | string   | yes      | ISO 8601 timestamp | Must match the decoder's ISO 8601 pattern, name a real calendar date, and parse to a finite date. |
 | `doseIn`            | quantity | no       | `g`                | Value must be finite and between 0 and 200. Unit must be `g`.                       |
 | `waterIn`           | quantity | yes      | `ml`               | Value must be finite and between 0 and 100,000. Unit must be `ml`.                  |
 | `beverageOut`       | quantity | yes      | `g`                | Value must be finite and between 0 and 100,000. Unit must be `g`.                   |
@@ -138,12 +138,12 @@ absolute millisecond timestamp, then formats Beanconqueror flow timestamps as
 
 | Field        | Type        | Required | Unit | Decoder rule                                                                                                                              |
 | ------------ | ----------- | -------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `source`     | string      | yes      |      | Non empty, at most 512 characters. Used as the provenance brand lookup key.                                                               |
+| `source`     | string      | yes      |      | Non empty, at most 512 characters. Stored verbatim in `brew.customInformation.imported`; not used for lookup.                              |
 | `sourceName` | string      | yes      |      | Non empty, at most 512 characters. Sender supplied display name.                                                                          |
 | `sourceUrl`  | string      | no       | URL  | 1 to 2,048 characters, must parse as a URL, must use `https:`, stored as the normalised `URL.href`.                                       |
 | `device`     | string      | no       |      | Empty string is treated as absent. Non empty values are at most 512 characters.                                                           |
 | `schema`     | integer     | yes      |      | Integer from 1 to 1,000. This is the sender schema, not the envelope version.                                                             |
-| `params`     | opaque JSON | no       |      | Sanitised as opaque JSON. The interface type is `Record<string, unknown>`, but the current validator accepts any bounded JSON value here. |
+| `params`     | object      | no       |      | Must be an object when present. Sanitised as opaque JSON inside that object.                                                              |
 
 `bean`, `imported.params`, and any nested opaque values accepted there are
 copied through a sanitiser. Objects are rebuilt with a null prototype, keys
@@ -166,7 +166,7 @@ capped at 10,000 characters, and object keys are capped at 512 characters.
 | `brew.grinderRpm`        | `brew.mill_speed`. Missing value becomes `0`.                                                             |
 | `brew.firstDripTime`     | Split into `coffee_first_drip_time` and `coffee_first_drip_time_milliseconds`. Missing value becomes `0`. |
 | `brew.bloomTime`         | Split into `coffee_blooming_time` and `coffee_blooming_time_milliseconds`. Missing value becomes `0`.     |
-| `brew.date`              | Parsed with `Date.parse`, divided by 1,000, floored, and stored in `brew.config.unix_timestamp`.          |
+| `brew.date`              | Validated as a real ISO 8601 calendar date, parsed with `Date.parse`, divided by 1,000, floored, and stored in `brew.config.unix_timestamp`. |
 | `imported`               | Stored in `brew.customInformation.imported`.                                                              |
 | `brew.rating`            | Clamped to the user's configured rating scale, never rescaled. Missing value becomes `0`.                 |
 | `brew.note`              | Starts `brew.note`. Name matching notes are appended after blank lines.                                   |
