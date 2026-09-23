@@ -75,3 +75,8 @@ export interface IHandoffEnvelope {
   metrics?: IHandoffMetric[];
   imported: IHandoffImport;
 }
+
+export interface IHandoffBatch {
+  v: 1;
+  brews: IHandoffEnvelope[];
+}
